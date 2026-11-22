@@ -82,6 +82,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .gate button{min-height:56px;border-radius:14px;background:#f1ecf7;font-weight:900;font-size:22px}
 .tbl{width:100%;border-collapse:collapse;font-size:18px;margin:8px 0}
 .tbl td,.tbl th{padding:6px 8px;border-bottom:1px solid #eee4f4;text-align:left}
+.testb{font-size:16px;vertical-align:middle;background:#ffcf2e;color:#5a4668;border-radius:10px;padding:3px 8px;text-shadow:none}
+.card h3{margin:14px 0 4px;font-size:22px;color:#7b5cff}
+.card h2 small{font-size:18px;color:#7d6d8c}
 .small-note{font-size:15px;color:#7d6d8c}
 @media (max-height:520px){
   .pad{width:80px;height:80px;font-size:34px}
@@ -106,7 +109,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
   <section id="map" class="scr">
     <div class="stage3d"><div class="labs"></div></div>
     <header class="bar">
-      <h1 class="ttl">Flauschi Land</h1>
+      <h1 class="ttl">Flauschi Land <span class="testb" id="mTest" style="display:none">TEST</span></h1>
       <div class="purse"><span class="tix" id="mTix">🎟 0</span><span class="stars" id="mStars">⭐ 0</span></div>
       <button class="small" data-act="parents" aria-label="Eltern">Eltern</button>
       <button class="small" data-act="about" aria-label="Über die App">i</button>
@@ -138,7 +141,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
   <div id="modal" class="modal"><div class="card" id="mCard"></div></div>
 </div>
-<script>window.FLMETA = {"version":"0.1.0","built":"22.11.2026 12:45","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
+<script>window.FLMETA = {"version":"0.1.1","built":"22.11.2026 12:53","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
 <script>/* Flauschi-Konto v1 – gemeinsames Punktekonto aller Flauschi-Lernapps (Klarinette, Englisch, Mathe, …).
    Vertrag: docs/FLAUSCHI_KONTO.md. Diese Datei wird in jede Lern-App unverändert kopiert (Prüfsumme vergleichen).
    Funktioniert nur, wenn alle Apps unter derselben Herkunft laufen: https://jaibai5.github.io/<app>/
@@ -490,15 +493,26 @@ FL.save = {
   }
 };
 // Darf ein Level starten? konto = FlauschiKonto.read(), sv = Spielstand
+// Testmodus der Eltern (sv.set.test): alle fertigen Länder, ohne Ticket und Tageslimit
 FL.canStart = (konto, sv, n, today) => {
-  const W = FL.WORLDS && FL.WORLDS[n - 1];
-  if (!W || n > sv.unlocked) return { ok: false, why: 'locked' };
+  const W = FL.WORLDS && FL.WORLDS[n - 1], test = !!(sv.set && sv.set.test);
+  if (!W || (n > sv.unlocked && !test)) return { ok: false, why: 'locked' };
   if (!W.ready) return { ok: false, why: 'soon' };
+  if (test) return { ok: true, test: true };
   const lim = konto.set && typeof konto.set.gameLimit === 'number' ? konto.set.gameLimit : 5;
   const used = (sv.days[today] && sv.days[today].starts) || 0;
   if (lim > 0 && used >= lim) return { ok: false, why: 'limit', lim, used };
   if (konto.tix < 1) return { ok: false, why: 'tix' };
   return { ok: true, lim, used };
+};
+FL.TEST_PW = 'Aff'; // Wunsch des Menschen 22.11.: Passwort für den Testmodus im Elternbereich (kein echter Schutz, nur gegen Zufall)
+FL.checkPw = pw => String(pw || '').trim() === FL.TEST_PW;
+// Einstieg im Testmodus: 'start', 'gate0', 'gate1', … oder 'boss'
+FL.placeAt = (st, from) => {
+  const L = st.L, p = st.p, m = /^gate(\d+)$/.exec(from || '');
+  if (m && L.gates && L.gates[+m[1]] !== undefined) { st.gate = +m[1]; p.x = L.gates[st.gate] + 1; }
+  else if (from === 'boss' && L.arena) { st.gate = (L.gates || []).length - 1; p.x = L.arena[0] - 2.5; }
+  return st;
 };
 FL.countStart = (sv, today) => { const d = sv.days[today] || (sv.days[today] = { starts: 0 }); d.starts++; const ks = Object.keys(sv.days).sort(); while (ks.length > 60) delete sv.days[ks.shift()]; };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1343,6 +1357,7 @@ let SV = FL.save.load(localStorage);
 const save = () => FL.save.store(localStorage, SV);
 const konto = () => FK.read();
 const today = () => FK.today();
+const TEST = () => !!(SV.set && SV.set.test);
 FK.persist();
 
 /* ---------- Töne (klein, selbst erzeugt) ---------- */
@@ -1407,9 +1422,11 @@ let MAP = null, CUR = 1;
 function openMap() {
   show('map'); purse();
   const k = konto(), host = $('#map .stage3d'); host.querySelector('.labs').innerHTML = '';
-  CUR = Math.min(Math.max(1, SV.cur || SV.unlocked), SV.unlocked);
+  const top = TEST() ? 12 : SV.unlocked;
+  CUR = Math.min(Math.max(1, SV.cur || SV.unlocked), top);
+  $('#mTest').style.display = TEST() ? '' : 'none';
   const list = FL.WORLDS.map(w => {
-    const r = SV.lv[w.n], open = w.n <= SV.unlocked, cr = r ? r.crowns : 0;
+    const r = SV.lv[w.n], open = w.n <= top, cr = r ? r.crowns : 0;
     return { n: w.n, open, done: !!(r && r.done), html: `${w.n}. ${esc(w.name)}<small>${open ? (cr ? '👑'.repeat(cr) : w.ready ? 'neu' : 'bald') : 'zu'}</small>` };
   });
   MAP = FL3D.map(host, { list, cur: CUR, char: k.char || 'alpaka', wear: k.wear, onArrive: (n, blocked) => { CUR = n; SV.cur = n; save(); updateGo(); if (blocked) toast('Erst ' + FL.WORLDS[n - 1].name + ' schaffen!'); } });
@@ -1418,7 +1435,7 @@ function openMap() {
 function updateGo() {
   const w = FL.WORLDS[CUR - 1], k = konto(), r = FL.canStart(k, SV, CUR, today());
   $('#mGoN').textContent = w.name;
-  $('#mGoS').textContent = r.ok ? 'Los! · 1 🎟' : r.why === 'soon' ? 'kommt bald' : r.why === 'tix' ? 'Los! · 1 🎟 fehlt' : r.why === 'limit' ? 'für heute fertig' : 'noch zu';
+  $('#mGoS').textContent = r.ok ? (r.test ? 'Testen' : 'Los! · 1 🎟') : r.why === 'soon' ? 'kommt bald' : r.why === 'tix' ? 'Los! · 1 🎟 fehlt' : r.why === 'limit' ? 'für heute fertig' : 'noch zu';
   $('#mGo').classList.toggle('off', !r.ok);
 }
 function tryStart(n) {
@@ -1428,6 +1445,10 @@ function tryStart(n) {
   if (r.why === 'limit') return modal(`<h2>Für heute ist Schluss</h2><p>Du hast heute schon ${r.used} Mal gespielt. Morgen geht es weiter!</p><div class="row"><button class="btn" data-act="close">Okay</button></div>`);
   if (r.why === 'tix') return modal(`<h2>Kein Ticket mehr</h2><p>Tickets bekommst du beim Üben:</p><div class="row">${APPS.map(a => `<a class="btn b2" href="${a.url}">${a.name}</a>`).join('')}</div><div class="row"><button class="btn" data-act="close">Okay</button></div>`);
   const L = FL.LEVELS[n];
+  if (r.test) {
+    const pts = [['start', 'Anfang']].concat((L.gates || []).map((g, i) => ['gate' + i, 'Tor ' + (i + 1)]), L.boss ? [['boss', 'Endgegner']] : []);
+    return modal(`<h2>${esc(w.name)} <small>(Test)</small></h2><p>Wo möchtest du anfangen?</p><div class="row">${pts.map(([f, t]) => `<button class="btn${f === 'start' ? '' : ' b2'}" data-act="testplay" data-n="${n}" data-f="${f}">${t}</button>`).join('')}</div><p class="small-note">Testmodus: kein Ticket, kein Tageslimit, Ergebnis wird nicht gespeichert.</p><div class="row"><button class="btn b2" data-act="close">Zurück</button></div>`);
+  }
   modal(`<h2>${esc(w.name)}</h2><p>${esc(L.text.intro)}</p><p class="small-note">Du hast ${k.tix} 🎟. Ein Level kostet 1 🎟.</p><div class="row"><button class="btn b2" data-act="close">Zurück</button><button class="btn" data-act="play" data-n="${n}">Los! · 1 🎟</button></div>`);
 }
 function play(n) {
@@ -1440,18 +1461,18 @@ function play(n) {
 /* ---------- Spiel ---------- */
 const KEYS = { l: false, r: false, jp: false };
 let G = null;
-function startLevel(n) {
+function startLevel(n, from) {
   MAP = null;
   show('game');
-  const k = konto(), L = FL.LEVELS[n], st = FL.newRun(L), host = $('#game .stage3d');
-  G = { n, st, acc: 0, view: null, paused: false, over: false, said: {}, fps: { n: 0, t: 0 } };
+  const k = konto(), L = FL.LEVELS[n], st = FL.placeAt(FL.newRun(L), from), host = $('#game .stage3d');
+  G = { n, st, test: TEST(), acc: 0, view: null, paused: false, over: false, said: {}, fps: { n: 0, t: 0 } };
   hud();
   G.view = FL3D.level(host, { st, char: k.char || 'alpaka', wear: k.wear, tick });
   say(L.text.intro, 3.5);
 }
 function tick(dt) {
   if (!G) return;
-  if (SHOWFPS || SIM) { const f = G.fps; f.n++; f.t += dt; if (f.t > 1) { if (SHOWFPS) $('#fps').style.display = 'block'; const ri = K3D.renderer().info.render; G.perf = { fps: Math.round(f.n / f.t), calls: ri.calls, tris: ri.triangles }; $('#fps').textContent = G.perf.fps + ' B/s · ' + ri.calls + ' DC' + (K3D.low ? ' (klein)' : ''); f.n = 0; f.t = 0; } }
+  if (SHOWFPS || SIM || G.test) { const f = G.fps; f.n++; f.t += dt; if (f.t > 1) { if (SHOWFPS || G.test) $('#fps').style.display = 'block'; const ri = K3D.renderer().info.render; G.perf = { fps: Math.round(f.n / f.t), calls: ri.calls, tris: ri.triangles }; $('#fps').textContent = G.perf.fps + ' B/s · ' + ri.calls + ' DC' + (K3D.low ? ' (klein)' : ''); f.n = 0; f.t = 0; } }
   if (G.paused || G.over || isModal()) return;
   const st = G.st;
   G.acc += dt * SPEED; let n = 0;
@@ -1495,13 +1516,15 @@ function downScreen() {
 }
 function finish() {
   G.over = true; const st = G.st, n = G.n, w = FL.WORLDS[n - 1];
-  const res = FL.save.finish(SV, n, st.got, st.total); SV.cur = Math.min(n + 1, SV.unlocked); save();
+  const res = G.test ? { crowns: FL.crowns(st.got, st.total), first: false, test: true } : FL.save.finish(SV, n, st.got, st.total);
+  if (!G.test) { SV.cur = Math.min(n + 1, SV.unlocked); save(); }
   G.result = res;
   setTimeout(() => {
     const next = FL.WORLDS[n];
     modal(`<h2>${esc(w.name)} geschafft!</h2><div class="crowns">${'👑'.repeat(res.crowns)}<i>${'👑'.repeat(3 - res.crowns)}</i></div>
       <p>${st.got} von ${st.total} ${esc(w.item)} gesammelt.</p><p>${esc(st.L.text.end)}</p>
       ${res.first && next ? `<p><b>Neu offen:</b> ${esc(next.name)}${next.ready ? '' : ' (kommt bald)'}</p>` : ''}
+      ${res.test ? `<p class="small-note">Testmodus: Spielzeit ${Math.round(st.t)} s, ${st.hurts} Treffer. Nicht gespeichert.</p>` : ''}
       <div class="row"><button class="btn" data-act="tomap">Zur Karte</button></div>`);
   }, 1800 / SPEED);
 }
@@ -1522,6 +1545,8 @@ function parents() {
     <table class="tbl"><tr><th>Lernapp (7 Tage)</th><th>Sterne</th><th>Tickets</th></tr>${rows}</table>
     <table class="tbl"><tr><th>Land</th><th>Kronen</th><th></th></tr>${lv}</table>
     <p class="small-note">Konto jetzt: ${k.tix} 🎟, ${k.stars} ⭐. Figur: ${esc(CHAR_NAMES[k.char] || '–')}${k.name ? ', Name: ' + esc(k.name) : ''}.</p>
+    <h3>Level testen</h3>${TEST() ? `<p>Testmodus ist <b>an</b>: alle fertigen Länder ohne Ticket, Einstieg auch am Tor oder beim Endgegner. Der Spielstand des Kindes bleibt unverändert.</p><div class="row"><button class="btn b2" data-act="testoff">Testmodus aus</button></div>`
+      : `<p class="small-note">Mit Passwort: alle Länder ohne Ticket testen.</p><input class="name" id="pwI" type="password" autocomplete="off" placeholder="Passwort"><div class="row"><button class="btn b2" data-act="teston">Testmodus an</button></div><p class="small-note" id="pwMsg"></p>`}
     <div class="row"><button class="btn b2" data-act="who">Figur ändern</button><button class="btn" data-act="close">Fertig</button></div>`);
 }
 function about() {
@@ -1539,6 +1564,9 @@ document.addEventListener('click', e => {
   else if (a === 'mgo' && MAP && !MAP.walking) tryStart(CUR);
   else if (a === 'isl' && MAP) MAP.go(+b.dataset.n);
   else if (a === 'play') play(+b.dataset.n);
+  else if (a === 'testplay') { if (TEST()) { closeModal(); startLevel(+b.dataset.n, b.dataset.f); } }
+  else if (a === 'teston') { if (FL.checkPw($('#pwI').value)) { SV.set.test = true; save(); closeModal(); openMap(); toast('Testmodus an'); } else { $('#pwMsg').textContent = 'Falsches Passwort.'; $('#pwI').value = ''; } }
+  else if (a === 'testoff') { delete SV.set.test; save(); closeModal(); openMap(); toast('Testmodus aus'); }
   else if (a === 'revive') { closeModal(); FL.revive(G.st); G.over = false; say('Weiter geht es!', 1.5); }
   else if (a === 'tomap') leaveGame();
   else if (a === 'pause' && G && !G.over) { G.paused = true; modal(`<h2>Pause</h2><div class="row"><button class="btn b2" data-act="quit">Zur Karte</button><button class="btn" data-act="resume">Weiter</button></div><p class="small-note">Zur Karte beendet das Level (das Ticket ist dann verbraucht).</p>`); }
@@ -1559,6 +1587,7 @@ hold('#bR', () => { KEYS.r = true; }, () => { KEYS.r = false; });
 hold('#bJ', () => { KEYS.jp = true; });
 const KL = ['ArrowLeft', 'KeyA'], KR = ['ArrowRight', 'KeyD'], KJ = ['Space', 'ArrowUp', 'KeyW'];
 document.addEventListener('keydown', e => {
+  if (e.target && e.target.id === 'pwI' && e.code === 'Enter') { $('[data-act="teston"]').click(); return; }
   if (e.target && e.target.tagName === 'INPUT') return;
   if (G) {
     if (KL.includes(e.code)) KEYS.l = true; else if (KR.includes(e.code)) KEYS.r = true;
