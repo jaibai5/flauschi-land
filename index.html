@@ -141,7 +141,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
   <div id="modal" class="modal"><div class="card" id="mCard"></div></div>
 </div>
-<script>window.FLMETA = {"version":"0.1.1","built":"22.11.2026 12:53","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
+<script>window.FLMETA = {"version":"0.1.2","built":"22.11.2026 14:18","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
 <script>/* Flauschi-Konto v1 – gemeinsames Punktekonto aller Flauschi-Lernapps (Klarinette, Englisch, Mathe, …).
    Vertrag: docs/FLAUSCHI_KONTO.md. Diese Datei wird in jede Lern-App unverändert kopiert (Prüfsumme vergleichen).
    Funktioniert nur, wenn alle Apps unter derselben Herkunft laufen: https://jaibai5.github.io/<app>/
@@ -233,7 +233,7 @@ const MON = FL.MON = {
   charger: { sp: 1.0, w: 0.95, h: 0.85, hp: 1, col: 0x6a5a8a }
 };
 const BOSS = FL.BOSS = {
-  puschel: { name: 'Puschel-Brummi', w: 2.0, h: 1.9, hp: 2, roll: 4.5, stomps: 2, tired: 2.8, wave: 6, waveH: 0.6 }
+  puschel: { name: 'Puschel-Brummi', w: 2.0, h: 1.9, hp: 2, roll: 4.2, stomps: 2, tired: 3.6, wave: 5.5, waveH: 0.6, hop: 7 }
 };
 
 /* ---------- Lauf anlegen ---------- */
@@ -275,6 +275,7 @@ function hurt(st, dir) {
   const p = st.p; if (p.inv > 0 || st.down || st.done) return;
   st.hearts--; st.hurts++; p.inv = P.INV; p.knock = P.KNOCK; p.vx = -dir * 7; p.vy = 7; p.ground = false; p.salto = 0;
   ev(st, 'hurt', p.x, p.y);
+  if (st.arena) { st.bossHurts = (st.bossHurts || 0) + 1; if (st.bossHurts === 2) ev(st, 'bosshelp', p.x, p.y); }
   if (st.hearts <= 0) { st.hearts = 0; st.down = true; ev(st, 'down', p.x, p.y); }
 }
 
@@ -293,7 +294,7 @@ FL.step = (st, inp) => {
   }
   if (p.salto > 0) p.salto = Math.max(0, p.salto - dt * 1.8);
   if (p.inv > 0) p.inv -= dt;
-  const py0 = p.y;
+  const py0 = p.y, px0 = p.x;
   p.vy = Math.max(P.FALL, p.vy - P.G * dt);
   p.x += p.vx * dt; p.y += p.vy * dt;
   // Grenzen: Levelanfang, Endgegner-Arena
@@ -312,13 +313,11 @@ FL.step = (st, inp) => {
     if (p.y <= best) { p.y = best; p.vy = 0; p.ground = true; p.jumps = 0; p.on = on; p.salto = 0; }
   }
   if (p.y < -6) { st.falls++; hurt(st, p.face); if (!st.down) { const g = gatePos(st); p.x = g; p.y = 0; p.vy = 0; } }
-  // Bäume: Stamm und Krone von der Seite kosten ein Herz (oben drauf landen ist erlaubt)
+  // Bäume (Wunsch des Menschen 22.11.): kosten nie ein Herz. Der Stamm hält auf, auf der Krone darf man landen.
   for (const t of FL.trees(L)) {
-    if (Math.abs(p.x - t.x) > 2) continue;
-    if (p.on && p.on.kind === 'tree' && p.on.x === t.x) continue;
-    const trunk = overlap(p.x, p.y, P.PW * 0.8, P.PH * 0.9, t.x, 0, 0.36, t.h - 0.85);
-    const crown = overlap(p.x, p.y, P.PW * 0.8, P.PH * 0.9, t.x, t.h - 0.95, t.cw * 1.9, 0.75);
-    if (trunk || crown) hurt(st, p.x < t.x ? 1 : -1);
+    if (Math.abs(p.x - t.x) > 2 || p.y >= t.h - 0.9) continue;
+    const hw = P.PW * 0.4 + 0.18;
+    if (Math.abs(p.x - t.x) < hw) { const s = (px0 <= t.x ? -1 : 1); p.x = t.x + s * hw; if (p.vx * s < 0) p.vx = 0; }
   }
   // Sammeln
   const cx = p.x, cy = p.y + P.PH / 2;
@@ -383,11 +382,11 @@ function stepBoss(st, py0) {
   if (b.state === 'roar') { if (b.t > 1.4) { b.state = 'roll'; b.t = 0; b.dir = p.x < b.x ? -1 : 1; } }
   else if (b.state === 'roll') {
     b.x += b.dir * d.roll * dt;
-    if ((b.dir < 0 && b.x <= lo) || (b.dir > 0 && b.x >= hi)) { b.x = Math.max(lo, Math.min(hi, b.x)); b.state = 'stomp'; b.t = 0; b.n = 0; b.vy = 10; b.ground = false; }
+    if ((b.dir < 0 && b.x <= lo) || (b.dir > 0 && b.x >= hi)) { b.x = Math.max(lo, Math.min(hi, b.x)); b.state = 'stomp'; b.t = 0; b.n = 0; b.vy = d.hop; b.ground = false; }
   } else if (b.state === 'stomp') {
     if (!b.ground) { b.vy -= 30 * dt; b.y += b.vy * dt; if (b.y <= 0) { b.y = 0; b.ground = true; b.n++; b.t = 0; st.waves.push({ x: b.x - d.w / 2, dir: -1 }, { x: b.x + d.w / 2, dir: 1 }); ev(st, 'boom', b.x, 0); } }
-    else if (b.t > 0.7) { if (b.n >= d.stomps) { b.state = 'tired'; b.t = 0; ev(st, 'tired', b.x, b.h); } else { b.vy = 10; b.ground = false; } }
-  } else if (b.state === 'tired') { if (b.t > d.tired) { b.state = 'roll'; b.t = 0; b.dir = b.x < (lo + hi) / 2 ? 1 : -1; } }
+    else if (b.t > 0.7) { if (b.n >= d.stomps) { b.state = 'tired'; b.t = 0; ev(st, 'tired', b.x, b.h); } else { b.vy = d.hop; b.ground = false; } }
+  } else if (b.state === 'tired') { if (b.t > FL.tiredTime(st)) { b.state = 'roll'; b.t = 0; b.dir = b.x < (lo + hi) / 2 ? 1 : -1; } }
   else if (b.state === 'hit') { if (b.t > 1.0) { if (b.hp <= 0) { b.state = 'free'; b.t = 0; ev(st, 'free', b.x, b.h); } else { b.state = 'roll'; b.t = 0; b.dir = b.x < (lo + hi) / 2 ? 1 : -1; } } }
   // Stampfwellen
   for (let i = st.waves.length - 1; i >= 0; i--) {
@@ -397,12 +396,16 @@ function stepBoss(st, py0) {
   }
   if (b.state === 'free' || b.state === 'hit') return;
   if (!overlap(p.x, p.y, P.PW * 0.85, P.PH * 0.9, b.x, b.y, b.w * 0.85, b.h)) return;
-  if (p.vy < 0 && py0 >= b.y + b.h * 0.55) {
+  // müde: großzügiger Treffer (auch von etwas tiefer)
+  if (p.vy < 0 && py0 >= b.y + b.h * (b.state === 'tired' ? 0.4 : 0.55)) {
     p.vy = P.BOUNCE * 1.1; p.jumps = 1; p.y = Math.max(p.y, b.y + b.h * 0.7);
     if (b.state === 'tired') { b.hp--; b.state = 'hit'; b.t = 0; st.waves.length = 0; ev(st, 'bosshit', b.x, b.h, { hp: b.hp }); }
     else ev(st, 'boing', b.x, b.h);
   } else if (b.state === 'roll' || b.state === 'stomp') hurt(st, p.x < b.x ? 1 : -1);
 }
+
+// Müde-Zeit: wird länger, wenn die Figur in der Arena schon Herzen verloren hat (kleine Hilfe)
+FL.tiredTime = st => BOSS[st.boss.type].tired + Math.min(2, (st.bossHurts || 0) * 0.5);
 
 /* ---------- nach 0 Herzen: weiter am letzten Tor (ohne neues Ticket) ---------- */
 FL.revive = st => {
@@ -546,7 +549,8 @@ FL.WORLDS.forEach(w => { w.ready = !!w.ready; });
 const trees = [[14, 1.5], [38, 1.7], [52, 1.6], [75, 1.8], [96, 1.6], [118, 1.9], [140, 1.7], [165, 1.6], [186, 1.8], [205, 1.7], [228, 1.9], [250, 1.6], [272, 1.8], [295, 1.7], [318, 1.9], [340, 1.7], [358, 1.8]];
 const clouds = [[30, 2.0, 3], [34.5, 3.6, 2.6], [58, 2.1, 3], [63, 3.7, 3], [68, 2.2, 2.6], [90, 2.0, 3], [110, 2.1, 3], [114, 3.8, 2.6],
   [145, 2.0, 3], [150, 3.6, 3], [155.4, 5.0, 2.6], [180, 2.1, 3], [200, 2.0, 3], [204, 3.7, 2.6], [222, 2.1, 3], [244, 2.0, 3], [248, 3.6, 2.6], [253, 5.1, 2.6],
-  [278, 2.1, 3], [284, 3.7, 3], [300, 2.0, 3], [323, 2.1, 3], [327, 3.8, 2.6], [345, 2.0, 3], [350, 3.6, 2.6]];
+  [278, 2.1, 3], [284, 3.7, 3], [300, 2.0, 3], [323, 2.1, 3], [327, 3.8, 2.6], [345, 2.0, 3], [350, 3.6, 2.6],
+  [385, 2.1, 3.2]]; // Arena: tiefe Wolke in der Mitte, dort rollt Puschel-Brummi unten durch (sicherer Platz)
 const items = [];
 [6, 20, 43, 70, 100, 133, 160, 192, 210, 233, 266, 290, 312, 335, 362].forEach(x => { for (let k = 0; k < 3; k++) items.push([x + k * 0.9, 0.6]); });
 clouds.forEach(([x, y]) => items.push([x, y + 0.6]));
@@ -557,8 +561,8 @@ FL.LEVELS = {
     hearts: [[93, 0.8], [204, 4.3], [331, 0.8]],
     mon: [['normal', 24, 3], ['bouncer', 46, 2], ['fast', 63, 5], ['jumper', 86, 3], ['farter', 107, 3], ['hover', 125, 0], ['big', 152, 4], ['charger', 176, 4],
       ['farter', 196, 3], ['bouncer', 216, 3], ['jumper', 238, 3], ['fast', 258, 3], ['big', 284, 4], ['hover', 306, 0], ['farter', 328, 3], ['charger', 349, 3], ['normal', 365, 2]],
-    gates: [128, 262], arena: [372, 396], boss: { type: 'puschel', x: 392 },
-    text: { intro: 'Sammle Kirschen! Hüpf auf die Monster. Puschel-Brummi wartet am Ende.', boss: 'Puschel-Brummi! Warte, bis sein Kopf leuchtet, dann spring drauf!', end: 'Puschel-Brummi ist wieder lieb!' }
+    gates: [128, 262], arena: [376, 394], boss: { type: 'puschel', x: 390 }, // Arena so schmal, dass sie ganz ins Bild passt
+    text: { intro: 'Sammle Kirschen! Hüpf auf die Monster. Puschel-Brummi wartet am Ende.', boss: 'Puschel-Brummi! Auf der Wolke bist du sicher. Leuchtet sein Kopf, spring drauf!', help: 'Tipp: Hüpf auf die Wolke in der Mitte. Wenn Puschel-Brummi müde ist und sein Kopf leuchtet, lauf hin und spring auf den Kopf!', end: 'Puschel-Brummi ist wieder lieb!' }
   }
 };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -1041,19 +1045,26 @@ function monster(type, d) {
   const big = type === 'big', r = d.h * 0.5, col = d.col;
   body.position.y = r;
   body.add(ball(r, col, { seg: 16 }));
-  // Fell: kleine Büschel rundherum
+  // Fell: Büschel nur hinten, seitlich und oben (das Gesicht vorne bleibt frei, sonst wirkt es zerstückelt)
   const R = rnd(type.length * 13 + 7);
-  for (let i = 0; i < 12; i++) { const a = R() * Math.PI * 2, b = (R() - 0.3) * 1.4, tuft = ball(r * 0.32, col, { seg: 8, line: false }); tuft.position.set(Math.cos(a) * Math.cos(b) * r * 0.92, Math.sin(b) * r * 0.92, Math.sin(a) * Math.cos(b) * r * 0.92); body.add(tuft); }
-  // Gesicht nach vorne (+z) und etwas zur Laufrichtung
-  const face = new T.Group(); face.position.set(0, r * 0.1, r * 0.82); body.add(face); g.face = face;
+  for (let i = 0, n = 0; i < 60 && n < 14; i++) {
+    const a = R() * Math.PI * 2, b = (R() - 0.3) * 1.4, x = Math.cos(a) * Math.cos(b), y = Math.sin(b), z = Math.sin(a) * Math.cos(b);
+    if (z > -0.1 && y < 0.6) continue;
+    n++; const tuft = ball(r * 0.3, col, { seg: 8, line: false }); tuft.position.set(x * r * 0.9, y * r * 0.9, z * r * 0.9); body.add(tuft);
+  }
+  // Gesicht: Teile sitzen genau auf der Kugel (z aus dem Radius), damit nichts darin versinkt
+  const sz = (x, y) => Math.sqrt(Math.max(0, 1 - x * x - y * y)) * r;
   g.eyes = [];
   [-1, 1].forEach(s => {
-    const e = at(ell(r * 0.26, r * 0.3, r * 0.14, 0xffffff, { line: false, seg: 12 }), s * r * 0.3, r * 0.15, 0); face.add(e);
-    const pu = at(ball(r * 0.13, 0x2d2238, { line: false, seg: 10 }), s * r * 0.26, r * 0.12, r * 0.12); face.add(pu); g.eyes.push(e, pu);
-    const br = at(new T.Mesh(new T.BoxGeometry(r * 0.38, r * 0.08, r * 0.08), K.mat(0x3a2448)), s * r * 0.3, r * 0.47, r * 0.08); br.rotation.z = s * -0.45; face.add(br);
+    const e = at(ell(r * 0.25, r * 0.29, r * 0.13, 0xffffff, { line: false, seg: 14 }), s * r * 0.32, r * 0.17, sz(0.32, 0.17) - r * 0.03); body.add(e);
+    const pu = at(ball(r * 0.13, 0x2d2238, { line: false, seg: 10 }), s * r * 0.29, r * 0.14, sz(0.32, 0.17) + r * 0.08); body.add(pu);
+    const hi = at(ball(r * 0.045, 0xffffff, { line: false, seg: 6 }), s * r * 0.29 + r * 0.05, r * 0.2, sz(0.32, 0.17) + r * 0.2); body.add(hi);
+    g.eyes.push(e, pu); (g.hi || (g.hi = [])).push(hi);
+    const br = at(new T.Mesh(new T.BoxGeometry(r * 0.36, r * 0.09, r * 0.09), K.mat(0x3a2448)), s * r * 0.32, r * 0.52, sz(0.32, 0.52) + r * 0.02); br.rotation.z = s * -0.4; body.add(br);
   });
-  const mouth = at(ell(r * 0.32, r * 0.12, r * 0.08, 0x5a1a3a, { line: false }), 0, -r * 0.3, 0.02); face.add(mouth); g.mouth = mouth;
-  [-1, 1].forEach(s => { const th = at(new T.Mesh(new T.ConeGeometry(r * 0.07, r * 0.16, 4), K.mat(0xffffff)), s * r * 0.14, -r * 0.24, r * 0.06); th.rotation.x = Math.PI; face.add(th); });
+  const mz = sz(0, 0.28);
+  const mouth = at(ell(r * 0.3, r * 0.12, r * 0.07, 0x5a1a3a, { line: false }), 0, -r * 0.28, mz - r * 0.02); body.add(mouth); g.mouth = mouth;
+  [-1, 1].forEach(s => { const th = at(new T.Mesh(new T.ConeGeometry(r * 0.07, r * 0.15, 4), K.mat(0xffffff)), s * r * 0.13, -r * 0.21, mz + r * 0.03); th.rotation.x = Math.PI; body.add(th); });
   // Hörnchen
   const hc = type === 'charger' ? 0xffe6a0 : 0xfff3df, hs = big || type === 'charger' ? 1.5 : 1;
   [-1, 1].forEach(s => { const h = at(tm(new T.ConeGeometry(r * 0.12 * hs, r * 0.36 * hs, 8), hc), s * r * 0.45, r * 0.85, 0.1); h.rotation.z = -s * 0.4; body.add(h); });
@@ -1073,7 +1084,7 @@ function poseMon(g, m, t) {
   const sleep = m.state === 'sleep';
   g.zzz.visible = sleep;
   if (sleep) {
-    g.body.scale.set(1.15, 0.7, 1.15); g.eyes.forEach((e, i) => { e.scale.y = (i % 2 ? 0.01 : e.scale.x * 0.15); });
+    g.body.scale.set(1.15, 0.7, 1.15); g.eyes.forEach((e, i) => { e.scale.y = (i % 2 ? 0.01 : e.scale.x * 0.15); }); if (g.hi) g.hi.forEach(h => { h.visible = false; });
     g.zzz.position.y = m.h * 0.7 + 0.3 + Math.sin(t * 2) * 0.1; g.zzz.material.opacity = 0.6 + Math.sin(t * 3) * 0.3; g.rotation.y = 0; return;
   }
   const walk = Math.sin(t * (m.state === 'charge' ? 22 : 10) + m.id);
@@ -1081,7 +1092,7 @@ function poseMon(g, m, t) {
   g.body.scale.set(1 + walk * 0.03, 1 - walk * 0.04, 1);
   g.body.rotation.z = Math.sin(t * 5 + m.id) * 0.05;
   if (g.wings) g.wings.forEach(w => { w.rotation.z = w.side * Math.sin(t * 18) * 0.6; });
-  g.rotation.y = (m.vx || 0) > 0 ? 0.5 : (m.vx || 0) < 0 ? -0.5 : 0;
+  g.rotation.y = (m.vx || 0) > 0 ? 0.3 : (m.vx || 0) < 0 ? -0.3 : 0;
 }
 
 /* ---------- Endgegner Puschel-Brummi ---------- */
@@ -1092,6 +1103,7 @@ function puschel() {
   crown.position.set(0, 1.0, 0); g.body.add(crown); g.crown = crown;
   const aura = new T.Sprite(new T.SpriteMaterial({ map: K.glowTex('rgba(150,80,220,1)'), transparent: true, depthWrite: false, opacity: 0.55 })); aura.scale.setScalar(4.2); aura.position.y = 1.0; aura.renderOrder = -1; g.add(aura); g.aura = aura;
   const glow = new T.Sprite(new T.SpriteMaterial({ map: K.glowTex('rgba(255,230,90,1)'), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0 })); glow.scale.setScalar(2.4); glow.position.y = 1.75; g.add(glow); g.glow = glow;
+  const arrow = K.textSprite('▼', { color: '#ffcf2e', stroke: '#5a4668', size: 96, h: 0.9 }); arrow.visible = false; g.add(arrow); g.arrow = arrow;
   g.stars = []; for (let i = 0; i < 3; i++) { const s = new T.Sprite(new T.SpriteMaterial({ map: K.starTex('#ffe66d'), transparent: true, depthWrite: false })); s.scale.setScalar(0.35); s.visible = false; g.add(s); g.stars.push(s); }
   return g;
 }
@@ -1167,8 +1179,19 @@ F3.level = (el, ctx) => {
   const getFart = i => { if (!farts[i]) { const c = new T.Group(); [[0, 0, 0.35], [0.3, 0.12, 0.25], [-0.28, 0.08, 0.27], [0.05, 0.3, 0.22]].forEach(b => { const s = new T.Mesh(new T.IcosahedronGeometry(b[2], 1), fartMat); s.position.set(b[0], b[1], 0); c.add(s); }); scene.add(c); farts[i] = c; } return farts[i]; };
   // Endgegner und Stampfwellen
   let boss = null; if (st.boss) { boss = puschel(); boss.position.set(st.boss.x, 0, 0); boss.rotation.y = -0.4; scene.add(boss); }
-  const waveM = K.mat(0xffd8f0, { t: 0.85 }), waves = [];
-  const getWave = i => { if (!waves[i]) { const w = new T.Mesh(new T.ConeGeometry(0.4, 0.65, 10, 1, true), waveM); w.position.y = 0.32; scene.add(w); waves[i] = w; } return waves[i]; };
+  // Stampf-Schüsse: kleine leuchtende Flauschkugeln, die über den Boden rollen
+  const waves = [];
+  const getWave = i => {
+    if (!waves[i]) {
+      const w = new T.Group(), core = new T.Group(); w.add(core); w.core = core; core.position.y = 0.3;
+      core.add(ball(0.24, K.mat(0xff7ac8, { e: 0xff3fa8, ei: 0.35 }), { seg: 12 }));
+      for (let k = 0; k < 10; k++) { const a = k * 2.4, b = Math.sin(k * 1.7) * 1.2; core.add(at(ball(0.12, K.mat(k % 2 ? 0xffb3de : 0xff7ac8, { e: 0xff3fa8, ei: 0.3 }), { seg: 6, line: false }), Math.cos(a) * Math.cos(b) * 0.24, Math.sin(b) * 0.24, Math.sin(a) * Math.cos(b) * 0.24)); }
+      const gl = new T.Sprite(new T.SpriteMaterial({ map: K.glowTex('rgba(255,120,200,1)'), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.7 })); gl.scale.setScalar(1.3); gl.position.y = 0.3; w.add(gl);
+      const sh = new T.Mesh(new T.CircleGeometry(0.28, 12).rotateX(-Math.PI / 2), new T.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false })); sh.position.y = 0.02; w.add(sh);
+      scene.add(w); waves[i] = w;
+    }
+    return waves[i];
+  };
   // Figur (Drehpunkt in der Mitte für den Salto)
   const piv = new T.Group(); scene.add(piv);
   const fig = K.char(ctx.char, ctx.wear); fig.position.y = -0.55; piv.add(fig);
@@ -1179,7 +1202,11 @@ F3.level = (el, ctx) => {
     const p = st.p, B = st.boss;
     // Kamera: folgt der Figur mit Vorausschau; in der Arena zwischen Figur und Endgegner
     let tx = p.x + 2.4 * p.face, ty = 2.2 + Math.max(0, p.y - 1.6) * 0.6, td = 10;
-    if (st.arena && L.arena) { tx = (L.arena[0] + L.arena[1]) / 2; td = 14.5; ty = 3.2 + Math.max(0, p.y - 2) * 0.5; }
+    // Arena: Figur und Endgegner immer beide im Bild (Kamera in der Mitte, Abstand je nach Bildformat)
+    if (st.arena && L.arena && B) {
+      const a0 = L.arena[0], a1 = L.arena[1], need = Math.abs(p.x - B.x) + 5, tanH = Math.tan(cam.fov * Math.PI / 360) * Math.max(0.5, cam.aspect);
+      tx = Math.max(a0 + 3, Math.min(a1 - 3, (p.x + B.x) / 2)); td = Math.max(11, Math.min(18, need / (2 * tanH))); ty = 2.6 + Math.max(0, p.y - 2) * 0.5;
+    }
     const k = Math.min(1, dt * 3.2); camX += (tx - camX) * k; camY += (ty - camY) * k; camD += (td - camD) * Math.min(1, dt * 1.5);
     cam.position.set(camX, camY + 0.6, camD); cam.lookAt(camX, camY - 0.5, 0);
     Lt.sun.position.set(camX + 4, 10, 7); Lt.sun.target.position.set(camX, 0, 0);
@@ -1206,12 +1233,13 @@ F3.level = (el, ctx) => {
       if (B.state === 'roll') { boss.body.rotation.z = -B.dir * tt * 5; boss.rotation.y = 0; } else { boss.body.rotation.z *= 0.8; boss.rotation.y = free ? -0.2 : -0.4 * Math.sign(st.p.x - B.x || -1) * -1; }
       boss.aura.material.opacity = free ? Math.max(0, boss.aura.material.opacity - dt) : 0.45 + Math.sin(tt * 3) * 0.12;
       boss.glow.material.opacity = tired ? 0.6 + Math.sin(tt * 8) * 0.35 : 0;
+      boss.arrow.visible = tired; boss.arrow.position.set(0, B.h + 1.3 + Math.abs(Math.sin(tt * 5)) * 0.35, 0);
       boss.stars.forEach((s, i) => { s.visible = tired || B.state === 'hit'; const a = tt * 3 + i * 2.1; s.position.set(Math.cos(a) * 0.8, 2.15, Math.sin(a) * 0.5); });
       boss.body.scale.set(B.state === 'hit' ? 1.15 : 1, B.state === 'hit' ? 0.8 : tired ? 0.92 + Math.sin(tt * 2) * 0.02 : 1, 1);
       boss.eyes.forEach((e, i) => { e.scale.y = tired && i % 2 === 0 ? e.scale.x * 0.4 : (i % 2 ? e.scale.x : e.scale.x * 1.15); });
       boss.mouth.scale.y = free ? 0.02 : 0.12; boss.crown.visible = !free;
       if (free) { boss.body.position.y = 0.95 + Math.abs(Math.sin(tt * 4)) * 0.2; boss.feet.forEach(f => { f.position.y = 0.12 + Math.abs(Math.sin(tt * 4)) * 0.2; }); }
-      st.waves.forEach((w, i) => { const m = getWave(i); m.visible = true; m.position.x = w.x; m.scale.setScalar(1 + Math.sin(tt * 20) * 0.08); });
+      st.waves.forEach((w, i) => { const m = getWave(i); m.visible = true; m.position.x = w.x; m.core.rotation.z = -w.dir * tt * 9; m.core.position.y = 0.3 + Math.abs(Math.sin(tt * 9 + i)) * 0.12; });
       for (let i = st.waves.length; i < waves.length; i++) waves[i].visible = false;
     }
     gates.forEach((g, i) => { g.scale.setScalar(i <= st.gate ? 0.9 + Math.max(0, 0.2 - (tt % 2) * 0.1) * 0 : 0.9); });
@@ -1378,6 +1406,18 @@ const SND = {
   roar: () => tone(160, 0.6, 'sawtooth', 90, 0.06), charge: () => tone(180, 0.2, 'square', 260, 0.05)
 };
 document.addEventListener('pointerdown', audio, { capture: true });
+
+/* ---------- Vollbild (wie Klarinette): braucht ein Tippen, darum beim ersten Tippen und nach dem Verlassen beim nächsten ----------
+   SV.set.full: 'auto' (Standard: nur auf Tablets), 'off'. Vom Startbildschirm gestartet ist die App schon ohne Leisten. */
+const TABLET = /Silk|Android|iPad/i.test(navigator.userAgent) || (window.matchMedia && matchMedia('(pointer:coarse)').matches);
+const APPMODE = () => !!(window.matchMedia && (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches));
+function fullOn() {
+  if ((SV.set.full || 'auto') === 'off' || !TABLET || SIM) return;
+  const d = document, el = d.documentElement;
+  if (d.fullscreenElement || d.webkitFullscreenElement || APPMODE()) return;
+  try { const r = (el.requestFullscreen || el.webkitRequestFullscreen).call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) {}
+}
+document.addEventListener('pointerup', fullOn, { capture: true });
 document.addEventListener('keydown', audio, { capture: true });
 
 /* ---------- Bildschirme ---------- */
@@ -1496,6 +1536,7 @@ function onEv(e) {
   if (e.type === 'arena' && !G.said.boss) { G.said.boss = 1; say(L.text.boss, 4); }
   if (e.type === 'tired' && !G.said.tired) { G.said.tired = 1; say('Jetzt! Spring auf den Kopf!', 2.2); }
   if (e.type === 'boing' && !G.said.boing) { G.said.boing = 1; say('Warte, bis der Kopf leuchtet!', 2.2); }
+  if (e.type === 'bosshelp' && L.text.help) say(L.text.help, 5);
   if (e.type === 'gate') say('Regenbogen-Tor! Hier geht es weiter, wenn die Herzen alle sind.', 2.6);
   if (e.type === 'free') say(L.text.end, 3);
 }
@@ -1547,6 +1588,7 @@ function parents() {
     <p class="small-note">Konto jetzt: ${k.tix} 🎟, ${k.stars} ⭐. Figur: ${esc(CHAR_NAMES[k.char] || '–')}${k.name ? ', Name: ' + esc(k.name) : ''}.</p>
     <h3>Level testen</h3>${TEST() ? `<p>Testmodus ist <b>an</b>: alle fertigen Länder ohne Ticket, Einstieg auch am Tor oder beim Endgegner. Der Spielstand des Kindes bleibt unverändert.</p><div class="row"><button class="btn b2" data-act="testoff">Testmodus aus</button></div>`
       : `<p class="small-note">Mit Passwort: alle Länder ohne Ticket testen.</p><input class="name" id="pwI" type="password" autocomplete="off" placeholder="Passwort"><div class="row"><button class="btn b2" data-act="teston">Testmodus an</button></div><p class="small-note" id="pwMsg"></p>`}
+    <h3>Vollbild</h3><p class="small-note">Auf dem Tablet geht das Spiel beim ersten Tippen in den Vollbildmodus.</p><div class="row"><button class="btn b2" data-act="fullset">Vollbild: ${(SV.set.full || 'auto') === 'off' ? 'aus' : 'automatisch'}</button></div>
     <div class="row"><button class="btn b2" data-act="who">Figur ändern</button><button class="btn" data-act="close">Fertig</button></div>`);
 }
 function about() {
@@ -1574,6 +1616,7 @@ document.addEventListener('click', e => {
   else if (a === 'quit') leaveGame();
   else if (a === 'parents') parentsGate();
   else if (a === 'gate') { if (b.dataset.v === b.dataset.ok) parents(); else { closeModal(); toast('Das war nicht richtig.'); } }
+  else if (a === 'fullset') { SV.set.full = (SV.set.full || 'auto') === 'off' ? 'auto' : 'off'; save(); b.textContent = 'Vollbild: ' + (SV.set.full === 'off' ? 'aus' : 'automatisch'); if (SV.set.full === 'off' && (document.fullscreenElement || document.webkitFullscreenElement)) (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
   else if (a === 'who') { closeModal(); whoPicker(); }
   else if (a === 'about') about();
 });
