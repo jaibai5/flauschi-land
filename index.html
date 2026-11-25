@@ -170,7 +170,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 
   <div id="modal" class="modal"><div class="card" id="mCard"></div></div>
 </div>
-<script>window.FLMETA = {"version":"0.3.0","built":"25.11.2026 20:26","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
+<script>window.FLMETA = {"version":"0.4.0","built":"25.11.2026 22:16","credits":[["Idee, Konzept, Architektur, Projektleitung und Tests","M.G."],["Programmiert von","KI Claude Opus 5.5 (Anthropic)"]],"note":"Gemeinsames Belohnungsspiel der Flauschi-Lernapps. Tickets kommen aus den Lernapps (Flauschi-Konto auf diesem Gerät). Alle Figuren und Monster selbst gestaltet; Bäume, Blumen und Steine in 3D aus den freien Kenney-Paketen (CC0, kenney.nl), 3D mit three.js (MIT). Keine Daten nach außen, keine Werbung, keine Käufe."};</script>
 <script>/* Flauschi-Konto v1 – gemeinsames Punktekonto aller Flauschi-Lernapps (Klarinette, Englisch, Mathe, …).
    Vertrag: docs/FLAUSCHI_KONTO.md. Diese Datei wird in jede Lern-App unverändert kopiert (Prüfsumme vergleichen).
    Funktioniert nur, wenn alle Apps unter derselben Herkunft laufen: https://jaibai5.github.io/<app>/
@@ -246,7 +246,9 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 'use strict';
 const FL = root.FL = root.FL || {};
 const DT = 1 / 60;
-const P = FL.PHYS = { G: 32, JUMP: 12.5, JUMP2: 11, RUN: 5.2, ACC: 45, AIR: 30, FALL: -22, PW: 0.8, PH: 1.0, INV: 1.6, KNOCK: 0.3, HEARTS: 4, BOUNCE: 10, SUPER: 19, SPRING: 16.5 };
+const P = FL.PHYS = { G: 32, JUMP: 12.5, JUMP2: 11, RUN: 5.2, ACC: 45, AIR: 30, FALL: -22, PW: 0.8, PH: 1.0, INV: 1.6, KNOCK: 0.3, HEARTS: 4, BOUNCE: 10, SUPER: 19, SPRING: 16.5,
+  // ab Land 4/5: Seerose sinkt (Einheiten/s) und ist bei LILY_MAX unter Wasser; morscher Ast bricht nach CRACK s, wächst nach REGROW s nach; Schlamm bremst
+  LILY_SINK: 0.3, LILY_RISE: 0.5, LILY_MAX: 0.5, CRACK: 0.7, REGROW: 3.2, MUD: 0.5 };
 FL.DT = DT;
 
 /* ---------- Monster ---------- */
@@ -269,16 +271,25 @@ const MON = FL.MON = {
   // Werfer (schwebt und lässt Hagelkörner fallen, vorher ein Schatten am Boden)
   splitter: { sp: 0.9, w: 1.25, h: 1.1, hp: 1, col: 0xe6dcff },
   blower:  { sp: 0.7, w: 1.0, h: 0.9, hp: 1, col: 0xbfe2ff, rest: 2.2, suck: 0.9, blow: 1.8, reach: 6.5, push: 3.4 },
-  hail:    { sp: 0.8, w: 1.0, h: 0.8, hp: 1, col: 0x7f8fb0, fly: 2.0, every: 2.6, near: 6, fall: 7 }
+  hail:    { sp: 0.8, w: 1.0, h: 0.8, hp: 1, col: 0x7f8fb0, fly: 2.0, every: 2.6, near: 6, fall: 7 },
+  // neu ab Land 4/5: Schwarm (fliegt im Zickzack), Irrlicht (erscheint und verschwindet; nur sichtbar angreifbar),
+  // Werfer (wirft Eicheln im Bogen dorthin, wo die Figur gerade steht)
+  swarm:   { sp: 0, w: 0.9, h: 0.7, hp: 1, col: 0x5a5a48 },
+  wisp:    { sp: 0, w: 0.8, h: 0.8, hp: 1, col: 0x9affd0, on: 2.6, fade: 0.5, off: 1.6 },
+  thrower: { sp: 0.7, w: 0.9, h: 0.9, hp: 1, col: 0xb07a3a, every: 2.8, near: 8, T: 1.05, vy: 6.5 }
 };
 const BOSS = FL.BOSS = {
   puschel: { name: 'Puschel-Brummi', w: 2.0, h: 1.9, hp: 2, roll: 4.2, stomps: 2, tired: 3.6, wave: 5.5, waveH: 0.6, hop: 7 },
   // Gewitterwolke: schwebt oben (nicht erreichbar), lässt Blitze fallen (vorher Schatten), sinkt dann müde herab
   donner:  { name: 'Donnerbrumm', w: 2.4, h: 1.5, hp: 3, fly: 3.9, sp: 2.4, zaps: 3, every: 1.15, warn: 1.0, strike: 0.3, boltW: 0.7, tired: 3.6 },
   // Großer Zauberpilz: hüpft zur Figur (Sporenwellen beim Landen), lässt kleine Hopspilze regnen, dann hängt der Hut müde
-  pilz:    { name: 'Großer Zauberpilz', w: 2.0, h: 2.2, hp: 3, hops: 3, hop: 8, hopX: 2.6, wave: 5, waveH: 0.6, rain: 2, tired: 3.6 }
+  pilz:    { name: 'Großer Zauberpilz', w: 2.0, h: 2.2, hp: 3, hops: 3, hop: 8, hopX: 2.6, wave: 5, waveH: 0.6, rain: 2, tired: 3.6 },
+  // Riesenkröte: reißt das Maul auf (Warnung), schnellt die Zunge vor (drüberspringen), hüpft zur Figur, dass der Boden wackelt
+  quabbel: { name: 'Quabbel', w: 2.4, h: 1.8, hp: 3, licks: 2, aim: 0.9, tongue: 6.5, tsp: 16, hold: 0.25, tongueY: 1.0, leap: 10, wave: 5, waveH: 0.6, tired: 3.6 },
+  // alter Knorrbaum: wirft Eicheln im Bogen, dann schlagen Wurzeln aus dem Boden (vorher Risse), dann leuchtet sein Astknoten
+  knorz:   { name: 'Knorz', w: 2.2, h: 2.4, hp: 3, throws: 3, every: 0.9, roots: 3, rEvery: 0.85, warn: 1.0, strike: 0.45, rootW: 0.65, rootH: 1.6, tired: 3.6 }
 };
-const HURT_STATES = { roll: 1, stomp: 1, hop: 1 };
+const HURT_STATES = { roll: 1, stomp: 1, hop: 1, leap: 1 };
 
 /* ---------- Lauf anlegen ---------- */
 FL.newRun = (L) => {
@@ -288,7 +299,7 @@ FL.newRun = (L) => {
     items: L.items.map(([x, y]) => ({ x, y, got: false })),
     hearts2: (L.hearts || []).map(([x, y]) => ({ x, y, got: false })),
     mons: L.mon.map(([type, x, patrol, base], i) => newMon(type, x, patrol, i, base)),
-    clouds: [], waves: [], bolts: [], shots: [], boss: L.boss ? newBoss(L) : null, ev: []
+    clouds: [], waves: [], bolts: [], shots: [], lily: {}, brk: {}, boss: L.boss ? newBoss(L) : null, ev: []
   };
   st.total = st.items.length;
   return st;
@@ -320,14 +331,37 @@ function groundAt(L, x) {
 }
 FL.groundAt = groundAt; FL.hillAt = hillAt;
 FL.trees = L => L._trees || (L._trees = L.trees.map(([x, h]) => ({ x, h, cw: 0.7 })));
-// Wolke [x, Oberkante, Breite, Art]; Art 'b' = Sprungwolke (federt die Figur hoch wie ein Trampolin)
-FL.cloudList = L => L._clouds || (L._clouds = L.clouds.map(([x, y, w, k]) => ({ x, y, w, bounce: k === 'b' })));
+// Wolke [x, Oberkante, Breite, Art]; Art 'b' = Sprungwolke (federt die Figur hoch wie ein Trampolin),
+// 'l' = Seerose (sinkt, wenn man drauf steht), 'x' = morscher Ast (knackt und bricht kurz nach dem Betreten)
+FL.cloudList = L => L._clouds || (L._clouds = L.clouds.map(([x, y, w, k], i) => ({ x, y, w, i, bounce: k === 'b', lily: k === 'l', brittle: k === 'x' })));
 function supports(L) {
   if (L._sup) return L._sup;
   const s = [];
   FL.trees(L).forEach(t => s.push({ x: t.x, y: t.h, w: t.cw * 2, kind: 'tree' }));
-  FL.cloudList(L).forEach(c => s.push({ x: c.x, y: c.y, w: c.w, kind: 'cloud', bounce: c.bounce }));
+  FL.cloudList(L).forEach(c => s.push({ x: c.x, y: c.y, w: c.w, kind: 'cloud', bounce: c.bounce, lily: c.lily, brittle: c.brittle, ci: c.i }));
+  L._dyn = s.filter(x => x.lily || x.brittle);
   return (L._sup = s);
+}
+// aktuelle Oberkante einer Stütze (Seerose sinkt); null = trägt gerade nicht (Seerose unter Wasser, Ast abgebrochen)
+function supY(st, s) {
+  if (s.lily) { const d = st.lily[s.ci] || 0; return d >= P.LILY_MAX ? null : s.y - d; }
+  if (s.brittle) { const b = st.brk[s.ci]; return b && b.gone > 0 ? null : s.y; }
+  return s.y;
+}
+FL.supY = supY;
+// Seerosen sinken unter der Figur und tauchen wieder auf; morsche Äste knacken, brechen und wachsen nach
+function stepDyn(st, on0, dt) {
+  for (const s of st.L._dyn) {
+    if (s.lily) {
+      const d = st.lily[s.ci] || 0;
+      if (on0 === s && d < P.LILY_MAX) { let nd = d + P.LILY_SINK * dt; if (nd >= P.LILY_MAX) { nd = P.LILY_MAX + 0.6; ev(st, 'sink', s.x, s.y); } st.lily[s.ci] = nd; } // untergetaucht: bleibt kurz unten (etwa 1 s), dann taucht sie auf
+      else if (d > 0) st.lily[s.ci] = Math.max(0, d - P.LILY_RISE * dt);
+    } else {
+      const b = st.brk[s.ci] || (st.brk[s.ci] = { t: 0, gone: 0 });
+      if (b.gone > 0) { b.gone -= dt; if (b.gone <= 0) { b.gone = 0; b.t = 0; ev(st, 'regrow', s.x, s.y); } }
+      else if (b.t > 0 || on0 === s) { if (b.t === 0) ev(st, 'creak', s.x, s.y); b.t += dt; if (b.t >= P.CRACK) { b.gone = P.REGROW; b.t = 0; ev(st, 'break', s.x, s.y); } }
+    }
+  }
 }
 const ev = (st, type, x, y, extra) => { if (st.ev) st.ev.push(Object.assign({ type, x, y }, extra || {})); };
 
@@ -345,8 +379,9 @@ FL.step = (st, inp) => {
   const L = st.L, p = st.p, dt = DT; st.t += dt; inp = inp || {};
   // Bewegung
   const want = p.knock > 0 ? 0 : (inp.r ? 1 : 0) - (inp.l ? 1 : 0);
+  const mud = p.ground && !p.on && L.mud && L.mud.some(m => p.x > m[0] && p.x < m[1]); // Schlamm bremst
   if (p.knock > 0) p.knock -= dt;
-  else { const acc = p.ground ? P.ACC : P.AIR, tgt = want * P.RUN; if (p.vx < tgt) p.vx = Math.min(tgt, p.vx + acc * dt); else if (p.vx > tgt) p.vx = Math.max(tgt, p.vx - acc * dt); }
+  else { const acc = p.ground ? P.ACC : P.AIR, tgt = want * P.RUN * (mud ? P.MUD : 1); if (p.vx < tgt) p.vx = Math.min(tgt, p.vx + acc * dt); else if (p.vx > tgt) p.vx = Math.max(tgt, p.vx - acc * dt); }
   if (want) p.face = want;
   if (inp.jp && p.knock <= 0) {
     if (p.ground) { p.vy = P.JUMP; p.ground = false; p.jumps = 1; p.on = null; ev(st, 'jump', p.x, p.y); }
@@ -354,7 +389,8 @@ FL.step = (st, inp) => {
   }
   if (p.salto > 0) p.salto = Math.max(0, p.salto - dt * 1.8);
   if (p.inv > 0) p.inv -= dt;
-  const py0 = p.y, px0 = p.x, wasG = p.ground && !p.on;
+  const py0 = p.y, px0 = p.x, wasG = p.ground && !p.on, on0 = p.on;
+  supports(L); if (L._dyn.length) stepDyn(st, on0, dt);
   p.vy = Math.max(P.FALL, p.vy - P.G * dt);
   p.x += p.vx * dt; p.y += p.vy * dt;
   // Grenzen: Levelanfang, Endgegner-Arena
@@ -368,7 +404,8 @@ FL.step = (st, inp) => {
   if (p.vy <= 0) {
     let best = groundAt(L, p.x), on = null;
     for (const s of supports(L)) {
-      if (Math.abs(p.x - s.x) < s.w / 2 + P.PW * 0.3 && py0 >= s.y - 0.06 && p.y <= s.y + 0.001 && s.y > best) { best = s.y; on = s; }
+      const sy = supY(st, s); if (sy === null) continue;
+      if (Math.abs(p.x - s.x) < s.w / 2 + P.PW * 0.3 && py0 >= sy - 0.06 && p.y <= sy + 0.001 && sy > best) { best = sy; on = s; }
     }
     // bergab am Hügel: am Boden bleiben (sonst würde die Figur bei jedem Schritt kurz „fliegen“)
     const snap = wasG && !on && best > -50 && py0 - best < 0.35 ? 0.35 : 0;
@@ -376,9 +413,9 @@ FL.step = (st, inp) => {
     // Sprungwolke: federt hoch, zählt als erster Sprung (ein Doppelsprung geht danach noch)
     if (p.ground && on && on.bounce) { p.vy = P.SPRING; p.ground = false; p.jumps = 1; p.on = null; ev(st, 'spring', p.x, p.y); }
   }
-  if (p.ground) { p.sx = p.x; p.sy = p.y; }
-  // in ein Loch gefallen: Herz weg, zurück an die letzte sichere Stelle
-  if (p.y < hillAt(L, p.x) - 6) { st.falls++; hurt(st, p.face); if (!st.down) { const back = p.sx !== undefined; p.x = back ? p.sx - p.face * 0.6 : gatePos(st); p.y = back ? p.sy + 0.05 : 0; p.vy = 0; p.vx = 0; p.knock = 0; } }
+  if (p.ground && !(p.on && (p.on.lily || p.on.brittle))) { p.sx = p.x; p.sy = p.y; } // Seerosen und morsche Äste sind keine sicheren Stellen
+  // in ein Loch (bzw. ins Wasser) gefallen: Herz weg, zurück an die letzte sichere Stelle
+  if (p.y < hillAt(L, p.x) - (L.water ? 0.8 : 6)) { st.falls++; if (L.water) ev(st, 'splash', p.x, -0.3); hurt(st, p.face); if (!st.down) { const back = p.sx !== undefined; p.x = back ? p.sx - p.face * 0.6 : gatePos(st); p.y = back ? p.sy + 0.05 : 0; p.vy = 0; p.vx = 0; p.knock = 0; } }
   // Bäume (Wunsch des Menschen 22.11.): kosten nie ein Herz. Der Stamm hält auf, auf der Krone darf man landen.
   for (const t of FL.trees(L)) {
     if (Math.abs(p.x - t.x) > 2 || p.y >= t.h - 0.9) continue;
@@ -393,9 +430,9 @@ FL.step = (st, inp) => {
   for (let i = 0; i < st.mons.length; i++) stepMon(st, st.mons[i], py0);
   // Hagelkörner: fallen und zerspringen am Boden
   for (let i = st.shots.length - 1; i >= 0; i--) {
-    const s = st.shots[i]; s.vy = Math.max(-MON.hail.fall, s.vy - 14 * dt); s.y += s.vy * dt;
+    const s = st.shots[i]; s.vy = Math.max(-MON.hail.fall, s.vy - 14 * dt); s.y += s.vy * dt; if (s.vx) s.x += s.vx * dt;
     const g = groundAt(L, s.x);
-    if (s.y <= g + 0.15) { st.shots.splice(i, 1); ev(st, 'crack', s.x, g); continue; }
+    if (s.y <= g + 0.15 && s.vy < 0) { st.shots.splice(i, 1); ev(st, 'crack', s.x, g, { k: s.k }); continue; }
     if (s.y < hillAt(L, s.x) - 6) { st.shots.splice(i, 1); continue; }
     if (overlap(p.x, p.y, P.PW * 0.7, P.PH * 0.85, s.x, s.y - 0.15, 0.32, 0.32)) { st.shots.splice(i, 1); hurt(st, p.x < s.x ? 1 : -1); }
   }
@@ -445,6 +482,18 @@ function stepMon(st, m, py0) {
       if (Math.sign(dx) === m.dir && Math.abs(dx) < d.reach && Math.abs(p.y - m.y) < 2.6 && !st.done) p.x += m.dir * d.push * (p.ground ? 1 : 1.3) * dt;
       if (m.bt <= 0) { m.ph = 'rest'; m.bt = d.rest; }
     }
+  } else if (m.type === 'swarm') {
+    m.x = m.x0 + Math.sin(m.t * 0.8) * m.patrol; m.vx = Math.cos(m.t * 0.8);
+  } else if (m.type === 'wisp') {
+    // sichtbar -> verblasst -> unsichtbar (harmlos) -> taucht wieder auf
+    const c = d.on + d.fade * 2 + d.off, ph = m.t % c;
+    m.vis = ph < d.on ? 1 : ph < d.on + d.fade ? 1 - (ph - d.on) / d.fade : ph < d.on + d.fade + d.off ? 0 : (ph - d.on - d.fade - d.off) / d.fade;
+    m.x = m.x0 + Math.sin(m.t * 0.6) * m.patrol; m.vx = Math.cos(m.t * 0.6);
+  } else if (m.type === 'thrower') {
+    // wirft eine Eichel im Bogen dorthin, wo die Figur gerade ist (wer weiterläuft, wird nicht getroffen)
+    m.ft = (m.ft || 0) + dt; const dx = p.x - m.x;
+    if (m.ft > d.every && Math.abs(dx) < d.near && Math.abs(dx) > 1.2) { m.ft = 0; m.face = Math.sign(dx); m.vx = m.face * Math.abs(m.vx || d.sp); st.shots.push({ x: m.x + m.face * 0.3, y: m.y + m.h, vx: Math.max(-6, Math.min(6, dx / d.T)), vy: d.vy, k: 'acorn' }); ev(st, 'throw', m.x, m.y + m.h); }
+    else if (m.ft > 0.5) walk(m, dt);
   } else if (m.type !== 'hover') walk(m, dt);
   if (m.safe > 0) m.safe -= dt;
   const g = gy();
@@ -452,6 +501,8 @@ function stepMon(st, m, py0) {
   if (m.type === 'hover') m.y = g + 1.0 + (Math.sin(m.t * 2) + 1) * 0.8;
   if (m.type === 'jumper') { m.vy -= 25 * dt; m.jy += m.vy * dt; if (m.jy <= 0) { m.jy = 0; m.vy = 9; } m.y = g + m.jy; }
   if (m.type === 'popper') m.y = g - (1 - m.up) * m.h;
+  if (m.type === 'swarm') m.y = g + 0.9 + Math.abs(((m.t * 1.6) % 2) - 1) * 1.0; // Zickzack
+  if (m.type === 'wisp') m.y = g + 0.9 + Math.sin(m.t * 1.8) * 0.4;
   if (m.type === 'spiky') { const ph = m.t % d.cyc; m.warn = ph >= d.warn && ph < d.out; m.spk = ph >= d.out; }
   if (m.type === 'hail') {
     m.y = g + d.fly + Math.sin(m.t * 2.2) * 0.15; m.ft += dt;
@@ -460,6 +511,7 @@ function stepMon(st, m, py0) {
   if (m.type === 'farter') { m.ft = (m.ft || 0) + dt; if (m.ft > 3) { m.ft = 0; st.clouds.push({ x: m.x - Math.sign(m.vx || 1) * 0.6, y: g + 0.5, t: 2.2 }); ev(st, 'fart', m.x, m.y); } }
   // Berührung mit der Figur (Auftaucher nur, wenn er oben ist)
   if (m.type === 'popper' && m.up < 0.6) return;
+  if (m.type === 'wisp' && m.vis < 0.6) return; // Irrlicht unsichtbar: harmlos, nicht zu treffen
   if (!overlap(p.x, p.y, P.PW * 0.85, P.PH * 0.9, m.x, m.y, m.w * 0.9, m.h)) return;
   if (p.vy < 0 && py0 >= m.y + m.h * 0.45) {
     if (m.type === 'spiky' && m.spk) { hurt(st, p.x < m.x ? 1 : -1); p.vy = 8; return; } // Stacheln draußen: autsch
@@ -492,6 +544,8 @@ function stepBoss(st, py0) {
   const lo = L.arena[0] + 1.6, hi = L.arena[1] - 1.6;
   if (b.type === 'donner') stepDonner(st, b, d, p, lo, hi);
   else if (b.type === 'pilz') stepPilz(st, b, d, p, lo, hi);
+  else if (b.type === 'quabbel') stepQuabbel(st, b, d, p, lo, hi);
+  else if (b.type === 'knorz') stepKnorz(st, b, d, p, lo, hi);
   else if (b.state === 'roar') { if (b.t > 1.4) { b.state = 'roll'; b.t = 0; b.dir = p.x < b.x ? -1 : 1; } }
   else if (b.state === 'roll') {
     b.x += b.dir * d.roll * dt;
@@ -508,11 +562,12 @@ function stepBoss(st, py0) {
     if (p.y < d.waveH && Math.abs(p.x - w.x) < 0.45) hurt(st, w.dir > 0 ? -1 : 1);
   }
   // Blitze: erst Schatten am Boden (warn), dann schlägt er ein (strike)
+  // (Knorz: Wurzeln, vorher Risse im Boden; gleiche Regel)
   for (let i = st.bolts.length - 1; i >= 0; i--) {
-    const z = st.bolts[i], bd = BOSS.donner; z.t += dt;
-    if (z.t >= bd.warn && !z.hit) { z.hit = true; ev(st, 'zap', z.x, 0); }
-    if (z.t >= bd.warn + bd.strike) { st.bolts.splice(i, 1); continue; }
-    if (z.hit && Math.abs(p.x - z.x) < bd.boltW && p.y < 3.2) hurt(st, p.x < z.x ? 1 : -1);
+    const z = st.bolts[i], bd = BOSS.donner, warn = z.warn || bd.warn, strike = z.strike || bd.strike; z.t += dt;
+    if (z.t >= warn && !z.hit) { z.hit = true; ev(st, z.k === 'root' ? 'root' : 'zap', z.x, 0); }
+    if (z.t >= warn + strike) { st.bolts.splice(i, 1); continue; }
+    if (z.hit && Math.abs(p.x - z.x) < (z.w || bd.boltW) && p.y < (z.h || 3.2)) hurt(st, p.x < z.x ? 1 : -1);
   }
   if (b.state === 'free' || b.state === 'hit') return;
   if (!overlap(p.x, p.y, P.PW * 0.85, P.PH * 0.9, b.x, b.y, b.w * 0.85, b.h)) return;
@@ -567,6 +622,47 @@ function stepPilz(st, b, d, p, lo, hi) {
   else if (b.state === 'hit') { if (b.t > 1.0) { if (b.hp <= 0) bossFree(st, b); else { b.state = 'hop'; b.t = 0; b.n = 0; jump(); } } }
 }
 
+// Quabbel: aim (Maul auf) -> lick (Zunge) ×n -> leap (hüpft zur Figur, Boden wackelt: Wellen) -> tired -> aim …
+function stepQuabbel(st, b, d, p, lo, hi) {
+  const dt = DT, face = () => { b.dir = p.x < b.x ? -1 : 1; };
+  const aim = () => { b.state = 'aim'; b.t = 0; b.tl = 0; face(); ev(st, 'aim', b.x, b.h); };
+  if (b.state === 'roar') { if (b.t > 1.4) { b.n = 0; aim(); } }
+  else if (b.state === 'aim') { if (b.t > d.aim) { b.state = 'lick'; b.t = 0; ev(st, 'lick', b.x, 0.7); } }
+  else if (b.state === 'lick') {
+    const out = d.tongue / d.tsp;
+    b.tl = b.t < out ? d.tongue * b.t / out : b.t < out + d.hold ? d.tongue : Math.max(0, d.tongue * (1 - (b.t - out - d.hold) / out));
+    if (b.tl > 0.2) { const a = b.x + b.dir * d.w * 0.35, e = a + b.dir * b.tl; if (p.y < d.tongueY && p.x > Math.min(a, e) - 0.3 && p.x < Math.max(a, e) + 0.3) hurt(st, -b.dir); }
+    if (b.t > out * 2 + d.hold) {
+      b.tl = 0; b.n++;
+      if (b.n < d.licks) aim();
+      else { face(); b.state = 'leap'; b.t = 0; b.vy = d.leap; b.ground = false; b.x0 = b.x; b.tx = Math.max(lo, Math.min(hi, p.x - b.dir * 3.5)); ev(st, 'jumpboss', b.x, 0); }
+    }
+  } else if (b.state === 'leap') {
+    // großer Hüpfer, landet kurz vor der Figur (nie auf ihr), dann wackelt der Boden
+    b.vy -= 30 * dt; b.y += b.vy * dt; b.x = b.x0 + (b.tx - b.x0) * Math.min(1, b.t / (2 * d.leap / 30));
+    if (b.y <= 0 && b.vy < 0) { b.y = 0; b.ground = true; b.state = 'land'; b.t = 0; st.waves.push({ x: b.x - d.w / 2, dir: -1 }, { x: b.x + d.w / 2, dir: 1 }); ev(st, 'boom', b.x, 0); }
+  } else if (b.state === 'land') { if (b.t > 0.6) { b.state = 'tired'; b.t = 0; ev(st, 'tired', b.x, b.h); } }
+  else if (b.state === 'tired') { if (b.t > FL.tiredTime(st)) { b.n = 0; aim(); } }
+  else if (b.state === 'hit') { b.tl = 0; if (b.t > 1.0) { if (b.hp <= 0) bossFree(st, b); else { b.n = 0; aim(); } } }
+}
+// Knorz: throw ×n (Eicheln im Bogen) -> roots ×n (Risse, dann Wurzeln) -> tired (Astknoten leuchtet) -> throw …
+function stepKnorz(st, b, d, p, lo, hi) {
+  const L = st.L, start = () => { b.state = 'throw'; b.t = 0; b.n = 0; };
+  b.dir = p.x < b.x ? -1 : 1;
+  if (b.state === 'roar') { if (b.t > 1.4) start(); }
+  else if (b.state === 'throw') {
+    if (b.n < d.throws && b.t >= 0.5 + b.n * d.every) {
+      b.n++; const sx = b.x + b.dir * 0.7, sy = b.h * 0.9, T = 1.22;
+      st.shots.push({ x: sx, y: sy, vx: Math.max(-6, Math.min(6, (p.x - sx) / T)), vy: 6.5, k: 'acorn' }); ev(st, 'throw', sx, sy);
+    }
+    if (b.n >= d.throws && b.t > 0.5 + d.throws * d.every + 0.6) { b.state = 'roots'; b.t = 0; b.n = 0; ev(st, 'roar', b.x, b.h); }
+  } else if (b.state === 'roots') {
+    if (b.n < d.roots && b.t >= b.n * d.rEvery) { b.n++; const x = Math.max(L.arena[0] + 0.8, Math.min(L.arena[1] - 0.8, p.x)); st.bolts.push({ x, t: 0, hit: false, k: 'root', warn: d.warn, strike: d.strike, w: d.rootW, h: d.rootH }); ev(st, 'rumble', x, 0); }
+    if (b.n >= d.roots && !st.bolts.length) { b.state = 'tired'; b.t = 0; ev(st, 'tired', b.x, b.h); }
+  } else if (b.state === 'tired') { if (b.t > FL.tiredTime(st)) start(); }
+  else if (b.state === 'hit') { if (b.t > 1.0) { if (b.hp <= 0) bossFree(st, b); else start(); } }
+}
+
 // Müde-Zeit: wird länger, wenn die Figur in der Arena schon Herzen verloren hat (kleine Hilfe)
 FL.tiredTime = st => BOSS[st.boss.type].tired + Math.min(2, (st.bossHurts || 0) * 0.5);
 
@@ -574,7 +670,7 @@ FL.tiredTime = st => BOSS[st.boss.type].tired + Math.min(2, (st.bossHurts || 0) 
 FL.revive = st => {
   const p = st.p; st.down = false; st.hearts = P.HEARTS;
   p.x = gatePos(st); p.y = hillAt(st.L, p.x); p.vx = 0; p.vy = 0; p.inv = 2; p.knock = 0; p.jumps = 0; p.salto = 0; p.ground = true;
-  st.clouds.length = 0; st.waves.length = 0; st.bolts.length = 0; st.shots.length = 0; st.bossHurts = 0;
+  st.clouds.length = 0; st.waves.length = 0; st.bolts.length = 0; st.shots.length = 0; st.bossHurts = 0; st.lily = {}; st.brk = {};
   for (let i = st.mons.length - 1; i >= 0; i--) if (st.mons[i].mini) st.mons.splice(i, 1);
   if (st.boss && st.boss.state !== 'free') { const nb = newBoss(st.L); Object.assign(st.boss, nb); st.arena = false; }
   // Monster in der Nähe des Tors zurück auf ihren Platz (nicht direkt neben der Figur)
@@ -594,6 +690,7 @@ function cloneNear(st) {
   return {
     L: st.L, t: st.t, hearts: st.hearts, got: 0, total: 0, gate: st.gate, down: false, done: false, arena: st.arena, stomps: 0, hurts: 0, falls: 0,
     p: Object.assign({}, p), items: st.items.filter(i => !i.got && near(i)).map(i => ({ x: i.x, y: i.y, got: false })), hearts2: [],
+    lily: Object.assign({}, st.lily), brk: Object.fromEntries(Object.entries(st.brk).map(([k, v]) => [k, Object.assign({}, v)])),
     mons: st.mons.filter(near).map(m => Object.assign({}, m)), clouds: st.clouds.map(c => Object.assign({}, c)), shots: st.shots.map(c => Object.assign({}, c)), waves: st.waves.map(w => Object.assign({}, w)), bolts: st.bolts.map(z => Object.assign({}, z)), bossHurts: st.bossHurts || 0,
     boss: st.boss ? Object.assign({}, st.boss) : null, ev: null
   };
@@ -724,8 +821,8 @@ FL.WORLDS = [
   { n: 1, id: 'kirschiland', name: 'Kirschiland', item: 'Kirschen', boss: 'Puschel-Brummi', ready: true },
   { n: 2, id: 'regenbogenland', name: 'Regenbogenland', item: 'Erdbeeren', boss: 'Donnerbrumm', ready: true },
   { n: 3, id: 'dunkler-wald', name: 'Dunkler Wald', item: 'Waldbeeren', boss: 'Großer Zauberpilz', ready: true },
-  { n: 4, id: 'sumpf', name: 'Sumpf', item: 'Seerosenblüten', boss: 'Quabbel' },
-  { n: 5, id: 'trockenwald', name: 'Trockener Wald', item: 'Wassertropfen', boss: 'Knorz' },
+  { n: 4, id: 'sumpf', name: 'Sumpf', item: 'Seerosenblüten', boss: 'Quabbel', ready: true },
+  { n: 5, id: 'trockenwald', name: 'Trockener Wald', item: 'Wassertropfen', boss: 'Knorz', ready: true },
   { n: 6, id: 'wueste', name: 'Wüste', item: 'Kaktusfeigen', boss: 'Sabbel' },
   { n: 7, id: 'wasserland', name: 'Wasserland', item: 'Muscheln', boss: 'Tentakula' },
   { n: 8, id: 'riff', name: 'Unter Wasser', item: 'Perlen', boss: 'Plustro' },
@@ -824,6 +921,74 @@ FL.LEVELS = {
       gates: [125, 277], arena: [374, 392], boss: { type: 'pilz', x: 388 },
       names: { jumper: 'Hopspilz', farter: 'Sporenpilz', popper: 'Schlummerpilz', spiky: 'Igelpilz', hover: 'Glühpilz', fast: 'Rollpilz' },
       text: { intro: 'Im dunklen Wald! Spring auf die Äste, oben gibt es mehr Beeren. Vorsicht vor den Zauberpilzen!', boss: 'Der Große Zauberpilz! Spring über die Sporenwellen. Hängt sein Hut müde, spring drauf!', help: 'Tipp: Spring über die Sporenwellen. Wenn der Hut des Zauberpilzes müde herabhängt und leuchtet, spring auf ihn drauf!', end: 'Der Große Zauberpilz ist wieder lieb und leuchtet fröhlich!' }
+    };
+  })(),
+
+  /* ---------- Land 4: Sumpf ----------
+     Neu: Seerosenblätter sinken langsam, wenn man drauf steht (schnell weiterhüpfen). Schlamm bremst.
+     Trübes Wasser zwischen den Ufern (hineinfallen kostet ein Herz), bemooste Baumstämme als Plattformen.
+     Monster: Blubberfrosch (Hüpfer), Mückenschwarm (Zickzack), Schlammbatzen (Teiler), Irrlicht (erscheint und verschwindet),
+     Sumpfschnecke (Brocken). Endgegner: Quabbel, die Riesenkröte. */
+  4: (() => {
+    const r2 = v => Math.round(v * 100) / 100;
+    const gaps = [[30, 35], [58, 65], [92, 97], [118, 126], [150, 156], [184, 192], [214, 219], [240, 249], [270, 276], [300, 309], [334, 340]];
+    const mud = [[12, 19], [70, 80], [160, 170], [224, 233], [280, 292], [345, 353]];
+    const clouds = [], items = [];
+    // Seerosen in jeder Wasserstelle: eine (schmal), zwei oder drei (breit)
+    gaps.forEach(([a, b]) => {
+      const W = b - a, n = W <= 5 ? 1 : W <= 7 ? 2 : 3, w = r2(Math.min(2.2, W / n - 0.4)); // breit genug, dass ein normaler Sprung immer auf einer Seerose landet
+      for (let k = 0; k < n; k++) { const x = r2(a + W * (k + 1) / (n + 1)); clouds.push([x, 0.05, w, 'l']); items.push([x, 0.65]); }
+    });
+    // bemooste Stämme über dem Ufer: einer auf 2,0, in jedem zweiten Abschnitt ein höherer (3,5) mit mehr Blüten
+    const secs = [[0, 30], [35, 58], [65, 92], [97, 118], [126, 150], [156, 184], [192, 214], [219, 240], [249, 270], [276, 300], [309, 334], [340, 372]];
+    secs.forEach(([s, e], i) => {
+      const m = r2((s + e) / 2 + (i % 2 ? 2 : -2)); clouds.push([m, 2.0, 3]); items.push([m, 2.6]);
+      if (i % 2 === 1) { const h = r2(m + (i % 4 === 1 ? 3.6 : -3.6)); clouds.push([h, 3.5, 2.6]); items.push([h - 0.7, 4.1], [h + 0.7, 4.1]); }
+    });
+    const inGap = x => gaps.some(([a, b]) => x > a - 0.7 && x < b + 0.7);
+    for (let x = 5; x < 370; x += 4.5) { const xi = r2(x); if (inGap(xi) || Math.abs(xi - 136) < 2 || Math.abs(xi - 262) < 2) continue; items.push([xi, 0.6]); }
+    for (let x = 377; x < 390; x += 3) items.push([x, 0.6]);
+    return {
+      n: 4, id: 'sumpf', theme: 'sumpf', len: 404, end: 397, water: true, trees: [], clouds, items, gaps, mud,
+      hearts: [[110, 0.8], [clouds.find(c => c[1] === 3.5 && c[0] > 200)[0], 4.4], [318, 0.8]],
+      mon: [['jumper', 22, 2], ['swarm', 45, 3], ['splitter', 78, 2], ['jumper', 86, 1.5], ['wisp', 108, 2], ['big', 140, 3], ['jumper', 170, 3],
+        ['swarm', 203, 3], ['wisp', 230, 2], ['splitter', 256, 2], ['big', 288, 3], ['jumper', 322, 3], ['swarm', 328, 1.5], ['splitter', 352, 2], ['wisp', 364, 2]],
+      gates: [136, 262], arena: [374, 392], boss: { type: 'quabbel', x: 388 },
+      names: { jumper: 'Blubberfrosch', swarm: 'Mückenschwarm', splitter: 'Schlammbatzen', wisp: 'Irrlicht', big: 'Sumpfschnecke' },
+      text: { intro: 'Im Sumpf! Die Seerosen sinken, wenn du drauf stehst. Schnell weiterhüpfen! Im Schlamm geht es langsam.', boss: 'Quabbel, die Riesenkröte! Reißt sie das Maul auf, spring über die Zunge!', help: 'Tipp: Wenn Quabbel das Maul aufreißt, kommt die Zunge. Spring drüber oder bleib weit weg. Nach dem großen Hüpfer ist sie müde: dann spring auf ihren Kopf!', end: 'Quabbel ist wieder eine liebe Kröte und quakt fröhlich!' }
+    };
+  })(),
+
+  /* ---------- Land 5: Trockener Wald ----------
+     Neu: morsche Äste knacken und brechen kurz nach dem Betreten ab (sie wachsen nach). Trockene Schluchten im Boden.
+     Wo Wassertropfen gesammelt werden, sprießt Gras (zeigt den Fortschritt).
+     Monster: Distelkugel (Flitzer), Knisterkäfer (Läufer), Holzwurm (Auftaucher), Staubteufelchen (Stachler), Eichelwerfer (Werfer).
+     Endgegner: Knorz, der alte Knorrbaum. */
+  5: (() => {
+    const r2 = v => Math.round(v * 100) / 100;
+    const gaps = [[52, 56.5], [110, 115], [168, 172.5], [226, 231], [292, 296.5], [340, 345]];
+    const clouds = [], items = [];
+    // über jeder Schlucht ein morscher Ast (er trägt kurz, dann bricht er)
+    gaps.forEach(([a, b]) => { const x = r2((a + b) / 2); clouds.push([x, 1.2, 2.2, 'x']); items.push([x, 1.8]); });
+    // Äste: fest auf 2,0; darüber morsche auf 3,6 (und manchmal 5,1) mit mehr Tropfen
+    const groups = [[16, 2], [38, 3], [76, 2], [96, 3], [130, 2], [150, 3], [190, 2], [210, 3], [246, 2], [272, 3], [312, 2], [326, 3], [358, 2]];
+    groups.forEach(([x, lv], i) => {
+      clouds.push([x, 2.0, 3]); items.push([x, 2.6]);
+      const h = x + (i % 2 ? -4 : 4); clouds.push([h, 3.6, 2.4, 'x']); items.push([h - 0.6, 4.2], [h + 0.6, 4.2]);
+      if (lv > 2) { clouds.push([x, 5.1, 2.4, 'x']); items.push([x - 0.7, 5.7], [x, 5.7], [x + 0.7, 5.7]); }
+    });
+    const inGap = x => gaps.some(([a, b]) => x > a - 0.7 && x < b + 0.7);
+    for (let x = 5; x < 370; x += 5) { if (inGap(x) || Math.abs(x - 136) < 2 || Math.abs(x - 262) < 2) continue; items.push([x, 0.6]); }
+    for (let x = 377; x < 390; x += 3) items.push([x, 0.6]);
+    return {
+      n: 5, id: 'trockenwald', theme: 'dry', len: 404, end: 397, trees: [], clouds, items, gaps,
+      hearts: [[120, 0.8], [210, 5.9], [318, 0.8]],
+      mon: [['normal', 24, 3], ['fast', 44, 3], ['popper', 68, 0], ['thrower', 86, 1.5], ['spiky', 102, 3], ['normal', 124, 2], ['thrower', 143, 1.5],
+        ['fast', 160, 3], ['popper', 180, 0], ['spiky', 200, 3], ['thrower', 216, 1.5], ['fast', 240, 3], ['popper', 252, 0], ['spiky', 280, 3],
+        ['normal', 306, 3], ['thrower', 320, 1.5], ['fast', 354, 3], ['popper', 366, 0]],
+      gates: [136, 262], arena: [374, 392], boss: { type: 'knorz', x: 388 },
+      names: { normal: 'Knisterkäfer', fast: 'Distelkugel', popper: 'Holzwurm', thrower: 'Eichelwerfer', spiky: 'Staubteufelchen' },
+      text: { intro: 'Der Wald ist vertrocknet! Sammle Wassertropfen, dann wächst wieder Gras. Morsche Äste knacken und brechen!', boss: 'Knorz, der alte Knorrbaum! Weich den Eicheln aus. Wo der Boden reißt, kommt eine Wurzel!', help: 'Tipp: Lauf weg, wenn der Boden Risse bekommt, dort kommt gleich eine Wurzel. Wenn sein Astknoten leuchtet, spring auf Knorz drauf!', end: 'Knorz ist wieder grün und freut sich über den Regen!' }
     };
   })()
 };
@@ -1393,6 +1558,98 @@ function cloudMon(g, body, type, r, R, col0) {
   }
   if (type === 'hail') { g.hailb = []; for (let i = 0; i < 5; i++) { const h = at(ball(r * 0.1, 0xf2fbff, { line: false, seg: 6 }), (i / 4 - 0.5) * r * 1.1, -r * 0.95 - (i % 2) * 0.08, 0.15); body.add(h); g.hailb.push(h); } }
 }
+/* Sumpf-Monster: Blubberfrosch, Mückenschwarm, Schlammbatzen, Irrlicht, Sumpfschnecke */
+function swampMon(g, body, type, r, R) {
+  body.position.y = r;
+  if (type === 'swarm') {
+    body.add(ball(r * 0.72, 0x6a6a50, { seg: 12 })); addFace(g, body, r * 0.72, 0);
+    const nose = at(new T.Mesh(new T.ConeGeometry(r * 0.07, r * 0.5, 5), K.mat(0x3a3a2a)), 0, -r * 0.12, r * 0.85); nose.rotation.x = Math.PI / 2; body.add(nose);
+    g.wings = [-1, 1].map(s => { const w = at(ell(r * 0.5, r * 0.06, r * 0.25, 0xe8f4ff, { t: 0.7 }), s * r * 0.72, r * 0.45, -0.1); body.add(w); w.side = s; return w; });
+    g.midges = []; for (let i = 0; i < 5; i++) { const mg = new T.Group(); mg.add(ball(r * 0.13, 0x3a3a2c, { seg: 6, line: false })); const w = ell(r * 0.16, r * 0.03, r * 0.09, 0xffffff, { t: 0.7, line: false }); w.position.y = r * 0.1; mg.add(w); mg.ph = i * 1.26; g.add(mg); g.midges.push(mg); }
+    return;
+  }
+  if (type === 'wisp') {
+    const m = K.mat(0x9affd0, { e: 0x40e0a0, ei: 0.9 });
+    body.add(ball(r * 0.78, m, { seg: 14 })); addFace(g, body, r * 0.78, 0);
+    const tip = at(tm(new T.ConeGeometry(r * 0.5, r * 0.9, 10), m), 0, r * 0.9, -0.08); body.add(tip);
+    g.glowS = glowSprite('rgba(120,255,190,1)', r * 4.5, 0.7); g.glowS.position.y = r; g.add(g.glowS); g.wispy = true;
+    return;
+  }
+  if (type === 'jumper') {
+    const col = 0x6cc04a, b = ball(r, col, { seg: 16 }); b.scale.set(1.2 * r, 0.85 * r, r); body.add(b);
+    [-1, 1].forEach(s => body.add(at(ball(r * 0.34, col, { seg: 10 }), s * r * 0.38, r * 0.55, r * 0.15)));
+    body.add(at(ell(r * 0.7, r * 0.42, r * 0.3, 0xe0f2a8, { line: false }), 0, -r * 0.38, r * 0.6));
+    addFace(g, body, r, 0);
+    g.feet = [-1, 1].map(s => { const f = at(ell(r * 0.38, r * 0.1, r * 0.34, 0x4f9a36), s * r * 0.5, r * 0.08, 0.15); g.add(f); return f; });
+    return;
+  }
+  if (type === 'big') {
+    // Sumpfschnecke: Kopf mit Fühlern, Schneckenhaus hinten oben
+    body.add(ball(r, 0xc9b06a, { seg: 16 })); addFace(g, body, r, 0);
+    const shell = new T.Group(); [0.75, 0.55, 0.36, 0.2].forEach((k, i) => { const t = tm(new T.TorusGeometry(r * k, r * 0.2 * (1 - i * 0.15), 8, 18), i % 2 ? 0xc0703a : 0xd88a48); t.position.set(-r * 0.1 * i, r * 0.12 * i, 0); shell.add(t); });
+    shell.position.set(-r * 0.2, r * 0.75, -r * 0.6); shell.rotation.y = Math.PI / 2 - 0.3; body.add(shell);
+    [-1, 1].forEach(s => { const a = at(new T.Mesh(new T.CylinderGeometry(r * 0.04, r * 0.05, r * 0.6, 5), K.mat(0xb09a5a)), s * r * 0.3, r * 1.1, r * 0.3); a.rotation.z = -s * 0.3; body.add(a); body.add(at(ball(r * 0.1, 0x3a2a20, { seg: 6, line: false }), s * r * 0.4, r * 1.4, r * 0.3)); });
+    g.feet = [at(ell(r * 1.1, r * 0.14, r * 0.5, 0xb0985a), 0, r * 0.1, 0)]; g.add(g.feet[0]);
+    return;
+  }
+  // Schlammbatzen (Teiler) und sonstige: brauner Batzen mit Klumpen und Tropfen
+  const col = type === 'splitter' ? 0x7a5a3a : 0x6a8a4a;
+  body.add(ball(r, col, { seg: 16 }));
+  for (let i = 0, n = 0; i < 80 && n < 12; i++) {
+    const a = R() * Math.PI * 2, b = (R() - 0.3) * 1.4, x = Math.cos(a) * Math.cos(b), y = Math.sin(b), z = Math.sin(a) * Math.cos(b);
+    if (z > -0.1 && y < 0.6) continue;
+    n++; const tuft = ball(r * (0.28 + R() * 0.15), i % 2 ? 0x6a4a30 : col, { seg: 8, line: false }); tuft.position.set(x * r * 0.9, y * r * 0.9, z * r * 0.9); body.add(tuft);
+  }
+  addFace(g, body, r, 0);
+  for (let i = 0; i < 3; i++) { const dr = at(new T.Mesh(new T.ConeGeometry(r * 0.1, r * 0.3, 5), K.mat(0x5a3e28)), (i - 1) * r * 0.5, -r * 0.95, r * 0.2); dr.rotation.x = Math.PI; body.add(dr); }
+  g.feet = [-1, 1].map(s => { const f = at(ell(r * 0.26, r * 0.12, r * 0.3, 0x4a3424), s * r * 0.42, r * 0.1, 0.1); g.add(f); return f; });
+}
+/* Monster im Trockenen Wald: Knisterkäfer, Distelkugel, Holzwurm, Staubteufelchen, Eichelwerfer */
+function dryMon(g, body, type, r, R) {
+  body.position.y = r;
+  if (type === 'fast') {
+    // Distelkugel: Gesicht vorne, rundherum eine rollende Kugel aus trockenen Zweigen
+    body.add(ball(r * 0.8, 0xc8a46a, { seg: 14 })); addFace(g, body, r * 0.8, 0);
+    const roll = new T.Group(), sm = K.mat(0x8a6a3a);
+    for (let i = 0; i < 16; i++) { const a = i * 2.4, b = Math.sin(i * 1.7) * 1.3, s = at(new T.Mesh(new T.CylinderGeometry(r * 0.03, r * 0.03, r * 0.8, 4), sm), Math.cos(a) * Math.cos(b) * r * 0.8, Math.sin(b) * r * 0.8, Math.sin(a) * Math.cos(b) * r * 0.8 - r * 0.1); s.rotation.set(a, b, a * 0.5); roll.add(s); }
+    for (let i = 0; i < 6; i++) roll.add(at(ball(r * 0.12, 0xb07ad0, { seg: 6, line: false }), Math.cos(i) * r * 0.85, Math.sin(i * 2) * r * 0.6, -r * 0.5));
+    body.add(roll); g.roll = roll;
+    return;
+  }
+  if (type === 'popper') {
+    // Holzwurm: drei Ringe, oben das Gesicht; versteckt sich in einem Baumstumpf
+    for (let i = 0; i < 3; i++) body.add(at(ball(r * (0.55 - i * 0.05), i % 2 ? 0xe0a090 : 0xd48a7a, { seg: 12 }), 0, -r * 0.6 + i * r * 0.45, 0));
+    addFace(g, body, r * 0.45, r * 0.3);
+    g.mound = new T.Group(); const stump = tm(new T.CylinderGeometry(r * 0.75, r * 0.85, r * 0.5, 10), 0x7a5a38); stump.position.y = r * 0.15; g.mound.add(stump);
+    g.mound.add(at(new T.Mesh(new T.CylinderGeometry(r * 0.6, r * 0.6, 0.02, 10), K.mat(0xd8b888)), 0, r * 0.41, 0)); g.add(g.mound);
+    return;
+  }
+  if (type === 'spiky') {
+    // Staubteufelchen: kleiner Wirbel aus Staub, Dornen fahren aus (dann nicht draufspringen)
+    const whirl = new T.Group(), dm = K.mat(0xd8b888, { t: 0.85 });
+    for (let i = 0; i < 5; i++) { const t = new T.Mesh(new T.TorusGeometry(r * (0.35 + i * 0.16), r * 0.08, 6, 16), dm); t.rotation.x = Math.PI / 2; t.position.y = -r * 0.8 + i * r * 0.38; whirl.add(t); }
+    body.add(whirl); g.whirl = whirl;
+    body.add(ball(r * 0.55, 0xc8a070, { seg: 12 })); addFace(g, body, r * 0.55, 0);
+    const sp = new T.Group(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, k = tm(new T.ConeGeometry(r * 0.1, r * 0.55, 5), 0x8a5a2a); k.geometry.translate(0, r * 0.27, 0); k.position.set(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5 + r * 0.1, -r * 0.1); k.rotation.z = a - Math.PI / 2; sp.add(k); }
+    body.add(sp); g.spikes = sp; g.spkU = true; g.warnG = glowSprite('rgba(255,150,60,1)', r * 3.2, 0); g.warnG.position.y = r * 1.2; g.add(g.warnG);
+    return;
+  }
+  if (type === 'thrower') {
+    // Eichelwerfer: Eichel mit Hut und Stiel
+    const b = ball(r, 0xc8904a, { seg: 16 }); b.scale.set(0.95 * r, 1.05 * r, 0.95 * r); body.add(b); addFace(g, body, r, -r * 0.1);
+    if (!CAPG) CAPG = new T.SphereGeometry(1, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const cap = tm(CAPG, 0x6a4a2a); cap.scale.set(r * 1.05, r * 0.6, r * 1.05); cap.position.y = r * 0.42; body.add(cap);
+    body.add(at(tm(new T.CylinderGeometry(r * 0.06, r * 0.08, r * 0.35, 5), 0x5a3a20), 0, r * 1.1, 0));
+    g.feet = [-1, 1].map(s => { const f = at(ell(r * 0.24, r * 0.12, r * 0.28, 0x5a3a20), s * r * 0.38, r * 0.1, 0.1); g.add(f); return f; });
+    return;
+  }
+  // Knisterkäfer: rotbrauner Panzer mit Mittellinie, Fühler, sechs Beinchen
+  const b = ball(r, 0xa8482e, { seg: 16 }); b.scale.set(1.1 * r, 0.9 * r, r); body.add(b);
+  body.add(at(new T.Mesh(new T.BoxGeometry(r * 0.06, r * 0.06, r * 1.6), K.mat(0x3a1a12)), 0, r * 0.88, -r * 0.2));
+  addFace(g, body, r, -r * 0.05);
+  [-1, 1].forEach(s => { const a = at(new T.Mesh(new T.CylinderGeometry(r * 0.03, r * 0.03, r * 0.6, 4), K.mat(0x3a1a12)), s * r * 0.3, r * 1.05, r * 0.4); a.rotation.set(0.5, 0, -s * 0.5); body.add(a); body.add(at(ball(r * 0.08, 0x3a1a12, { seg: 6, line: false }), s * r * 0.45, r * 1.3, r * 0.6)); });
+  g.feet = []; for (let i = 0; i < 6; i++) { const s = i % 2 ? 1 : -1, f = at(ell(r * 0.16, r * 0.08, r * 0.1, 0x3a1a12), s * r * 0.75, r * 0.08, (Math.floor(i / 2) - 1) * r * 0.45); g.add(f); g.feet.push(f); }
+}
 const glowSprite = (rgba, s, op) => { const g = new T.Sprite(new T.SpriteMaterial({ map: K.glowTex(rgba), transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: op === undefined ? 0.7 : op })); g.scale.setScalar(s); return g; };
 function monster(type, d, skin) {
   skin = skin || 'flausch';
@@ -1414,6 +1671,10 @@ function monster(type, d, skin) {
     if (type !== 'hover') g.feet = [-1, 1].map(s => { const f = at(ell(r * 0.22, r * 0.12, r * 0.26, 0x6a4a3a), s * r * 0.3, r * 0.1, 0.05); g.add(f); return f; });
   } else if (skin === 'sturm') {
     cloudMon(g, body, type, r, R, col);
+  } else if (skin === 'sumpf') {
+    swampMon(g, body, type, r, R);
+  } else if (skin === 'dry') {
+    dryMon(g, body, type, r, R);
   } else {
     body.add(ball(r, col, { seg: 16 }));
     // Fell: nur hinten, seitlich und oben (das Gesicht vorne bleibt frei)
@@ -1447,6 +1708,8 @@ function poseMon(g, m, t) {
   if (sleep && g.skin === 'sturm') { g.visible = false; return; }
   g.zzz.visible = sleep;
   if (g.mound) g.mound.position.y = m.type === 'popper' && !sleep ? (1 - (m.up || 0)) * m.h : 0;
+  if (g.midges) g.midges.forEach((mg, i) => { mg.visible = !sleep; mg.position.set(Math.cos(t * 4 + mg.ph) * 0.6, 0.5 + Math.sin(t * 7 + mg.ph) * 0.3, Math.sin(t * 4 + mg.ph) * 0.35); });
+  if (g.wispy) { const v = sleep ? 1 : (m.vis === undefined ? 1 : m.vis); g.scale.setScalar(0.25 + 0.75 * v); g.glowS.material.opacity = 0.7 * v; if (v < 0.05) { g.visible = false; return; } }
   if (sleep) {
     g.body.scale.set(1.15, 0.7, 1.15); g.eyes.forEach((e, i) => { e.scale.y = (i % 2 ? 0.01 : e.scale.x * 0.15); }); g.hi.forEach(h => { h.visible = false; });
     if (g.spikes) g.spikes.scale.setScalar(0.2); if (g.warnG) g.warnG.material.opacity = 0; if (g.glowS) g.glowS.material.opacity = 0.2;
@@ -1467,7 +1730,9 @@ function poseMon(g, m, t) {
     if (blow) g.wind.children.forEach(s => { const k = (t * 1.6 + s.ph) % 1; s.position.set(m.dir * (0.7 + k * 5.5), 0.55 + s.yy * (0.4 + k), 0.1); s.scale.x = 0.6 + k; s.material.opacity = 0.75 * (1 - k); });
   }
   if (g.hailb) g.hailb.forEach((h, i) => { h.position.y = -0.4 * (m.h / 0.8) - Math.abs(Math.sin(t * 4 + i)) * 0.06; });
-  if (g.glowS) g.glowS.material.opacity = 0.45 + Math.sin(t * 3 + m.id) * 0.2;
+  if (g.glowS && !g.wispy) g.glowS.material.opacity = 0.45 + Math.sin(t * 3 + m.id) * 0.2;
+  if (g.roll) g.roll.rotation.z = -m.x * 2.2;
+  if (g.whirl) g.whirl.rotation.y = t * 9;
   if (g.cap && m.type === 'fast') g.cap.rotation.y = t * 9;
   if (g.cap && m.type === 'jumper') g.cap.scale.y = 1 + Math.max(0, (m.vy || 0) / 9) * 0.25 - (m.jy < 0.05 ? 0.2 : 0);
   g.rotation.y = (m.vx || 0) > 0 ? 0.3 : (m.vx || 0) < 0 ? -0.3 : 0;
@@ -1490,7 +1755,27 @@ function bossDeco(g, h, crownY, crownS) {
 function bossModel(type) {
   if (type === 'donner') { const g = monster('big', { h: 1.5, col: 0x5f6888 }, 'sturm'); g.body.scale.set(1.45, 1, 1.1); return bossDeco(g, 1.5, 0.78, 0.9); }
   if (type === 'pilz') { const g = monster('jumper', { h: 2.2, col: 0x8a5cd6 }, 'pilz'); return bossDeco(g, 2.2, 1.22, 1.1); }
+  if (type === 'quabbel') { const g = monster('jumper', { h: 1.8, col: 0x5aa040 }, 'sumpf'); g.body.scale.set(1.3, 1, 1.15); g.feet.forEach(f => f.scale.multiplyScalar(1.3)); return bossDeco(g, 1.8, 0.95, 1.1); }
+  if (type === 'knorz') return knorzModel();
   const g = monster('big', { h: 1.9, col: 0xff7ac8 }); return bossDeco(g, 1.9, 1.0, 1);
+}
+// Knorz, der alte Knorrbaum: Stamm mit Gesicht, Wurzeln, kahle Äste mit trockenem Laub (entzaubert wird es grün)
+function knorzModel() {
+  const g = new T.Group(), body = new T.Group(); g.add(body); g.body = body; g.skin = 'dry'; g.feet = [];
+  const bark = 0x7a5a3a;
+  body.add(at(tm(new T.CylinderGeometry(0.62, 0.95, 2.3, 10), bark), 0, 1.15, 0));
+  addFace(g, body, 0.78, 1.25);
+  for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2 + 0.3, r = tm(new T.ConeGeometry(0.22, 1.1, 6), 0x6a4a2c); r.position.set(Math.cos(a) * 0.85, 0.2, Math.sin(a) * 0.85); r.rotation.set(Math.sin(a) * 1.2, 0, -Math.cos(a) * 1.2); body.add(r); }
+  const arms = [[-0.5, 2.1, 0.9, 1.1], [0.55, 2.2, -0.8, 1.0], [0, 2.4, 0.15, 0.9]];
+  g.dry = new T.Group(); g.green = new T.Group(); g.green.visible = false; body.add(g.dry, g.green);
+  arms.forEach(([x, y, rz, len]) => {
+    const a = tm(new T.CylinderGeometry(0.07, 0.14, len, 6), bark); a.geometry.translate(0, len / 2, 0); a.position.set(x * 0.6, y, 0); a.rotation.z = rz; body.add(a);
+    const ex = x * 0.6 - Math.sin(rz) * len, ey = y + Math.cos(rz) * len;
+    g.dry.add(at(ell(0.45, 0.3, 0.4, 0xb8864a, { seg: 10 }), ex, ey, 0)); g.green.add(at(ell(0.6, 0.45, 0.55, 0x6cc04a, { seg: 10 }), ex, ey + 0.05, 0));
+  });
+  body.add(at(ball(0.16, 0x5a3a20, { seg: 8 }), 0.32, 2.05, 0.5)); // Astknoten (leuchtet, wenn Knorz müde ist)
+  g.r0 = 0;
+  return bossDeco(g, 2.4, 2.75, 1.2);
 }
 // Blitz (Zickzack, Höhe 1, wird gestreckt)
 let BOLTG = null;
@@ -1550,6 +1835,56 @@ function blueberry() {
   const l = new T.Mesh(BB.l, BB.g); l.scale.set(0.12, 0.03, 0.07); l.position.set(0.08, 0.23, 0); g.add(l);
   return g;
 }
+// Seerosenblüte (Sumpf) und Wassertropfen (Trockener Wald), geteilte Geometrie
+let LO = null;
+function lotus() {
+  if (!LO) { LO = { p: new T.SphereGeometry(1, 8, 6), c: new T.SphereGeometry(0.07, 8, 6), mp: K.mat(0xff8fc8, { e: 0x802050, ei: 0.35 }), mi: K.mat(0xffd0e8, { e: 0x803060, ei: 0.3 }), mc: K.mat(0xffe066, { e: 0x806000, ei: 0.4 }) }; }
+  const g = new T.Group();
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, p = new T.Mesh(LO.p, LO.mp); p.scale.set(0.07, 0.17, 0.05); p.position.set(Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1); p.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6); g.add(p); }
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + 0.4, p = new T.Mesh(LO.p, LO.mi); p.scale.set(0.05, 0.13, 0.04); p.position.set(Math.cos(a) * 0.04, 0.03, Math.sin(a) * 0.04); p.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3); g.add(p); }
+  const c = new T.Mesh(LO.c, LO.mc); c.position.y = 0.06; g.add(c);
+  return g;
+}
+let WD = null;
+function waterDrop() {
+  if (!WD) {
+    // Tropfen: unten halbrund, nach oben spitz
+    const pts = []; for (let i = 0; i <= 6; i++) { const a = i / 6 * Math.PI / 2; pts.push(new T.Vector2(Math.sin(a) * 0.15, -Math.cos(a) * 0.15)); }
+    for (let i = 1; i <= 5; i++) { const k = i / 5; pts.push(new T.Vector2(0.15 * Math.pow(1 - k, 1.4), 0.26 * k)); }
+    WD = { g: new T.LatheGeometry(pts, 12), m: K.mat(0x5ab8ff, { e: 0x1a60b0, ei: 0.45 }), h: new T.SphereGeometry(0.035, 6, 4), mh: new T.MeshBasicMaterial({ color: 0xffffff }) }; }
+  const g = new T.Group(), d = new T.Mesh(WD.g, WD.m); g.add(d);
+  const h = new T.Mesh(WD.h, WD.mh); h.position.set(-0.05, 0.02, 0.12); g.add(h);
+  return g;
+}
+// Seerosenblatt (sinkt, wenn man drauf steht)
+let LP = null;
+function lilyPad(c) {
+  if (!LP) LP = { g: new T.CylinderGeometry(1, 1, 0.06, 20, 1, false, 0.35, Math.PI * 2 - 0.35), m: K.mat(0x4f9a3a), r: new T.TorusGeometry(0.7, 0.03, 4, 20), mr: K.mat(0x3f7a2e) };
+  const g = new T.Group(), p = tm(LP.g, LP.m); p.scale.set(c.w / 2, 1, c.w / 2 * 0.8); g.add(p);
+  const r = new T.Mesh(LP.r, LP.mr); r.rotation.x = Math.PI / 2; r.position.y = 0.035; r.scale.set(c.w / 2, c.w / 2 * 0.8, 1); g.add(r);
+  g.traverse(x => { if (x.isMesh) { x.castShadow = false; x.receiveShadow = true; } });
+  return g;
+}
+// bemooster Baumstamm (Sumpf, feste Plattform)
+let ML = null;
+function mossLog(c) {
+  if (!ML) ML = { l: new T.CylinderGeometry(0.22, 0.22, 1, 8).rotateZ(Math.PI / 2), ml: LM(0x6a4a30), mm: LM(0x5a8a3a), s: new T.SphereGeometry(1, 8, 5), h: new T.BoxGeometry(0.05, 1, 0.05) };
+  const g = new T.Group(), l = new T.Mesh(ML.l, ML.ml); l.scale.set(c.w + 0.2, 1, 1); l.position.y = -0.2; g.add(l);
+  for (let i = 0; i < 3; i++) { const m = new T.Mesh(ML.s, ML.mm); m.scale.set(c.w * 0.22, 0.08, 0.24); m.position.set((i - 1) * c.w * 0.3, -0.02, 0); g.add(m); }
+  for (let i = 0; i < 3; i++) { const h = new T.Mesh(ML.h, ML.mm); const len = 0.4 + (i % 2) * 0.35; h.scale.y = len; h.position.set((i - 1) * c.w * 0.32 + 0.15, -0.4 - len / 2, 0.1); g.add(h); }
+  g.position.set(c.x, c.y, 0); return g;
+}
+// trockener Ast (Trockener Wald): Stamm hinten (fest), Ast vorne (bei morschen Ästen beweglich: knackt, fällt)
+let DB = null;
+function dryBranch(c, side, brittle) {
+  if (!DB) DB = { a: new T.CylinderGeometry(0.1, 0.15, 1, 7).rotateZ(Math.PI / 2), tr: new T.CylinderGeometry(0.17, 0.26, 1, 7), crk: new T.BoxGeometry(0.04, 0.12, 0.3), lf: new T.IcosahedronGeometry(1, 0), ma: K.mat(0x8a6a44), mb: K.mat(0xc8a878), mt: LM(0x5a4030), mc: K.mat(0x3a2414), ml: LM(0xb07a3a) };
+  const trunk = new T.Group(), tx = side * (c.w / 2 + 0.45), tr = new T.Mesh(DB.tr, DB.mt); tr.scale.set(1, c.y + 7, 1); tr.position.set(c.x + tx, (c.y + 7) / 2 - 0.3, -1.0); trunk.add(tr);
+  const arm = new T.Group(), a = new T.Mesh(DB.a, brittle ? DB.mb : DB.ma); a.scale.set(c.w + 0.5, 1, 1); a.position.set(side * 0.25, -0.13, -0.05); a.castShadow = true; arm.add(a);
+  if (brittle) for (let i = 0; i < 3; i++) { const k = new T.Mesh(DB.crk, DB.mc); k.position.set((i - 1) * c.w * 0.3, -0.05, 0.08); k.rotation.z = (i - 1) * 0.5; arm.add(k); }
+  else [[-side * (c.w / 2), 0.05, 0.22], [0, 0.1, 0.16]].forEach(p => { const l = new T.Mesh(DB.lf, DB.ml); l.scale.set(p[2] * 1.3, p[2], p[2]); l.position.set(p[0], p[1], -0.25); arm.add(l); });
+  arm.position.set(c.x, c.y, 0);
+  return { trunk, arm };
+}
 // Regenbogen-Bogen als Boden: Oberseite mit 6 Farbstreifen in die Tiefe, Vorderseite mit 6 Farbbändern nach unten
 const RB_COL = [0xff6b8a, 0xffa94d, 0xffe066, 0x8ce99a, 0x74c0fc, 0xb197fc];
 // gaps = Lücken im Bogen (dort fehlt das Stück); großer Bogen: dickere Bänder
@@ -1591,13 +1926,18 @@ const LT = {
   // Regenbogenland (Umbau 25.11.): Kamera weiter weg (cam), Sonne über den Regenwolken (sunY), Wolkenmeer tief unten
   regen: { skin: 'sturm', sky: ['#7fb0e6', '#eef4fc'], fog: [0xe8eef8, 24, 70], light: { hi: 1.5, si: 1.5, sun: 0xf2f4ff }, back: 0xf4f7fd, rain: true, sun: true, sunY: 33, cam: 14, item: () => strawberry(), spark: '#ff3b4f', fart: 0xb0c0e0 },
   // Dunkler Wald (Wunsch 25.11.: etwas gruseliger): dunkler, kahle krumme Bäume, Baumgesichter, Augen im Dunkeln, Spinnweben, Fledermäuse, Nebel
-  wald: { skin: 'pilz', sky: ['#0c1219', '#26363a'], fog: [0x1c2830, 11, 34], light: { hi: 0.9, si: 1.1, sky: 0x98b0c8, ground: 0x22201c, sun: 0xd0dcff }, back: 0x26392b, front: 0x2e4433, item: () => blueberry(), spark: '#7a8cff', fart: 0xc9a0ff }
+  wald: { skin: 'pilz', sky: ['#0c1219', '#26363a'], fog: [0x1c2830, 11, 34], light: { hi: 0.9, si: 1.1, sky: 0x98b0c8, ground: 0x22201c, sun: 0xd0dcff }, back: 0x26392b, front: 0x2e4433, item: () => blueberry(), spark: '#7a8cff', fart: 0xc9a0ff },
+  // Sumpf: trübes grünes Wasser zwischen bemoosten Ufern, Schilf, tote Bäume, Irrlichter, Nebel
+  sumpf: { skin: 'sumpf', sky: ['#4a6658', '#b4c8aa'], fog: [0x9cb296, 13, 44], light: { hi: 1.25, si: 1.4, sky: 0xd8ecd0, ground: 0x3a4a30, sun: 0xfff0c8 }, back: 0x4a6a4a, ground: [0x6e9a3e, 0x4a3a28], water: 0x34605a, item: () => lotus(), spark: '#ff8fc8', fart: 0x9ab070 },
+  // Trockener Wald: staubig, warmes Licht, kahle braune Bäume, Risse im Boden; wo Tropfen gesammelt werden, sprießt Gras
+  dry: { skin: 'dry', sky: ['#d89a5c', '#f8e4bc'], fog: [0xf0d6ac, 18, 55], light: { hi: 1.35, si: 2.0, sky: 0xfff0d8, ground: 0x8a6a48, sun: 0xffe0b0 }, back: 0xc49c66, ground: [0xb88e5a, 0x7a5a3a], floor: 0x4a3420, sun: true, sunY: 9.5, item: () => waterDrop(), spark: '#5ab8ff', fart: 0xd8b888 }
 };
 // kahler, krummer Baum (Dunkler Wald); Teile werden später zusammengebacken
 let DTG = null;
-function deadTree(R, h) {
+function deadTree(R, h, cols) {
   if (!DTG) DTG = new T.CylinderGeometry(0.75, 1, 1, 5);
-  const g = new T.Group(), m = LM(R() < 0.5 ? 0x2a211d : 0x241c1a), lean = (R() - 0.5) * 0.3;
+  cols = cols || [0x2a211d, 0x241c1a];
+  const g = new T.Group(), m = LM(R() < 0.5 ? cols[0] : cols[1]), lean = (R() - 0.5) * 0.3;
   const seg = (x, y, rz, len, th) => { const b = new T.Mesh(DTG, m); b.scale.set(th, len, th); b.rotation.z = rz; b.position.set(x - Math.sin(rz) * len / 2, y + Math.cos(rz) * len / 2, 0); g.add(b); return [x - Math.sin(rz) * len, y + Math.cos(rz) * len]; };
   seg(0, 0, lean, h, 0.22);
   for (let i = 0; i < 5; i++) {
@@ -1617,10 +1957,28 @@ F3.level = (el, ctx) => {
   if (TH.sun) { sun = new T.Mesh(new T.SphereGeometry(2.2, 20, 14), new T.MeshBasicMaterial({ color: 0xffe14d })); scene.add(sun); const sunG = new T.Sprite(new T.SpriteMaterial({ map: K.glowTex('rgba(255,236,120,1)'), transparent: true, depthWrite: false, fog: false })); sunG.scale.setScalar(9); sun.add(sunG); }
   // Boden: Kenney-Blöcke als Streifen (wandern mit); Regenbogenland: Wolkenboden, Wald: dunkel getönt
   const tileMat = L.theme === 'regen' ? LM(0xf4f6ff, { emissive: 0x404858 }) : L.theme === 'wald' ? new T.MeshLambertMaterial({ vertexColors: true, color: 0x7a8f80 }) : undefined;
-  const tiles = [], REGEN = L.theme === 'regen';
-  if (!REGEN) for (let i = 0; i < 16; i++) { const b = K.model('pf-block-grass-large', { receive: true, mat: tileMat }); b.position.set(-10 + i * 2.08, -1, 0); b.scale.set(1, 1, 1.6); b.traverse(x => { if (x.isMesh) x.receiveShadow = true; }); scene.add(b); tiles.push(b); }
-  const back = new T.Mesh(new T.PlaneGeometry(1200, 70).rotateX(-Math.PI / 2), LM(TH.back, { flatShading: false })); back.position.set(L.len / 2, REGEN ? -13 : -0.02, -36.6); back.receiveShadow = !REGEN; scene.add(back);
-  if (!REGEN) { const front = new T.Mesh(new T.PlaneGeometry(1200, 6).rotateX(-Math.PI / 2), LM(TH.front, { flatShading: false })); front.position.set(L.len / 2, -0.03, 4.5); scene.add(front); }
+  const tiles = [], REGEN = L.theme === 'regen', SEG = !REGEN && !!L.gaps, SUMPF = L.theme === 'sumpf', DRY = L.theme === 'dry';
+  // Boden mit Lücken (Sumpf: Ufer im Wasser, Trockener Wald: Schluchten): feste Stücke zwischen den Lücken, zusammengebacken
+  if (SEG) {
+    const parts = [], cuts = L.gaps.slice().sort((a, b) => a[0] - b[0]); let x = -24;
+    const segs = []; cuts.forEach(([a, b]) => { segs.push([x, a]); x = b; }); segs.push([x, L.len + 26]);
+    segs.forEach(([a, b]) => {
+      for (let s = a; s < b; s += 20) { const e = Math.min(b, s + 20), w = e - s, m = (s + e) / 2; // in Stücken, damit das Zusammenbacken nach x aufteilen kann
+        parts.push(at(new T.Mesh(new T.BoxGeometry(w, 0.25, 8.4), LM(TH.ground[0])), m, -0.125, 1.6), at(new T.Mesh(new T.BoxGeometry(w, 3.8, 8.2), LM(TH.ground[1])), m, -2.15, 1.6)); }
+    });
+    // Schlamm (bremst): dunkle Flecken mit Blasen
+    (L.mud || []).forEach(([a, b]) => { parts.push(at(new T.Mesh(new T.BoxGeometry(b - a, 0.05, 3.6), LM(0x4a3524)), (a + b) / 2, 0.01, 0.6)); for (let k = 0; k < (b - a) * 0.8; k++) { const s = new T.Mesh(sph(6), LM(0x6a5034)); s.scale.setScalar(0.06 + R() * 0.08); s.position.set(a + R() * (b - a), 0.04, -1 + R() * 3.2); parts.push(s); } });
+    // Risse im trockenen Boden
+    if (DRY) for (let x2 = -20; x2 < L.len + 20; x2 += 2 + R() * 3) { if (L.gaps.some(g => x2 > g[0] - 1.5 && x2 < g[1] + 1.5)) continue; let cx = x2, cz = -2 + R() * 6, a = R() * 3; for (let k = 0; k < 3; k++) { const len = 0.4 + R() * 0.5, c = new T.Mesh(new T.BoxGeometry(len, 0.02, 0.05), LM(0x5a4028)); c.position.set(cx + Math.cos(a) * len / 2, 0.012, cz + Math.sin(a) * len / 2); c.rotation.y = -a; parts.push(c); cx += Math.cos(a) * len; cz += Math.sin(a) * len; a += (R() - 0.5) * 1.6; } }
+    bakeChunks(scene, parts, bakeMat(0), { recv: true });
+  }
+  if (!REGEN && !SEG) for (let i = 0; i < 16; i++) { const b = K.model('pf-block-grass-large', { receive: true, mat: tileMat }); b.position.set(-10 + i * 2.08, -1, 0); b.scale.set(1, 1, 1.6); b.traverse(x => { if (x.isMesh) x.receiveShadow = true; }); scene.add(b); tiles.push(b); }
+  if (!SUMPF) { const back = new T.Mesh(new T.PlaneGeometry(1200, 70).rotateX(-Math.PI / 2), LM(TH.back, { flatShading: false })); back.position.set(L.len / 2, REGEN ? -13 : -0.02, SEG ? -37.6 : -36.6); back.receiveShadow = !REGEN; scene.add(back); }
+  if (TH.floor) { const fl = new T.Mesh(new T.PlaneGeometry(1200, 60).rotateX(-Math.PI / 2), LM(TH.floor, { flatShading: false })); fl.position.set(L.len / 2, -4, -10); scene.add(fl); }
+  // Sumpfwasser: wandert mit der Kamera, Wellen im Shader
+  let water = null;
+  if (TH.water) { water = K.water(90, 64, TH.water, { seg: 36, op: 0.9 }); water.position.set(0, -0.3, -14); scene.add(water); }
+  if (!REGEN && !SEG) { const front = new T.Mesh(new T.PlaneGeometry(1200, 6).rotateX(-Math.PI / 2), LM(TH.front, { flatShading: false })); front.position.set(L.len / 2, -0.03, 4.5); scene.add(front); }
   const sky = [], movers = [], eyes = [], bats = [], mist = [];
   if (REGEN) {
     // Ein riesiger Regenbogen über einem Wolkenmeer. Unten Regen, oben über den Regenwolken scheint die Sonne.
@@ -1685,6 +2043,30 @@ F3.level = (el, ctx) => {
       if (/mushroom/.test(name) && R() < 0.45) { const g = glowSprite(GL[Math.floor(R() * 3)], 1.6 + R(), 0.55); g.position.set(x, 0.5, z + 0.2); scene.add(g); }
     }
     for (let i = 0; i < 10; i++) { const g = glowSprite('rgba(255,240,140,1)', 0.35, 0.9); g.ph = R() * 6; g.bx = R() * 30 - 15; g.by = 1 + R() * 4; g.bz = -1 - R() * 3; scene.add(g); movers.push(g); }
+  } else if (SUMPF) {
+    // tote Bäume im Wasser, Schilf an den Ufern, Seerosen und Stämme im Hintergrund, Irrlichter, Nebel
+    const dead = [], reeds = [], reedM = LM(0x6a8a3a), headM = LM(0x6a4a2a), reedG = new T.CylinderGeometry(0.025, 0.035, 1, 4), headG = new T.CapsuleGeometry(0.05, 0.16, 2, 5);
+    for (let x = -12; x < L.len + 20; x += 5 + R() * 6) { const d = deadTree(R, 3.5 + R() * 3, [0x3a3a2a, 0x2e3226]); d.position.set(x, -0.3, -4.5 - R() * 9); d.rotation.y = (R() - 0.5) * 0.8; dead.push(d); }
+    const reedAt = (x, z, hmax) => { for (let k = 0; k < 4; k++) { const h = 0.5 + R() * hmax, r = new T.Mesh(reedG, reedM); r.scale.y = h; r.position.set(x + (R() - 0.5) * 0.5, h / 2 - 0.3, z + (R() - 0.5) * 0.4); r.rotation.z = (R() - 0.5) * 0.25; reeds.push(r); if (k % 2 === 0) { const hd = new T.Mesh(headG, headM); hd.position.set(r.position.x, h - 0.3, r.position.z); reeds.push(hd); } } };
+    for (let x = -12; x < L.len + 20; x += 1.4 + R() * 2.2) { reedAt(x, -2.2 - R() * 1.5, 1.1); if (R() < 0.35) reedAt(x + 0.6, 3.6 + R() * 1.6, 0.4); }
+    bakeChunks(scene, dead, bakeMat(0x060806));
+    bakeChunks(scene, reeds, bakeMat(0x101808));
+    const BG = ['lily_large', 'lily_large', 'log', 'stump_round', 'lily_large', 'hanging_moss', 'rock_smallA'];
+    for (let x = -10; x < L.len + 20; x += 3 + R() * 3.5) { const name = BG[Math.floor(R() * BG.length)], tree = /tree/.test(name), m = K.model(name, { s: tree ? 2.4 + R() : 1.4 + R() * 0.8 }); m.position.set(x, /lily/.test(name) ? -0.28 : -0.3, tree ? -10 - R() * 6 : -3.5 - R() * 6); m.rotation.y = R() * 6; scene.add(noShadow(m)); }
+    for (let i = 0; i < 8; i++) { const g = glowSprite('rgba(140,255,200,1)', 0.5, 0.9); g.ph = R() * 6; g.bx = R() * 30 - 15; g.by = 0.6 + R() * 2.5; g.bz = -2 - R() * 5; scene.add(g); movers.push(g); }
+    for (let i = 0; i < 7; i++) { const m = glowSprite('rgba(210,230,210,1)', 1, 0.2); m.material.blending = T.NormalBlending; m.scale.set(8 + R() * 4, 1.4, 1); m.bx = i * 5 - 16; m.bz = 1 - R() * 5; m.sp = 0.15 + R() * 0.25; scene.add(m); mist.push(m); }
+  } else if (DRY) {
+    // kahle braune Bäume, Herbstbäume weit hinten, Stümpfe, Steine, trockene Büsche, Staub, Hügel
+    const dead = [], dryM = new T.MeshLambertMaterial({ vertexColors: true, color: 0xc8a060 });
+    for (let x = -12; x < L.len + 20; x += 2.6 + R() * 3.5) { const d = deadTree(R, 3 + R() * 3.5, [0x6a4a30, 0x5a3e28]); d.position.set(x, 0, -3 - R() * 7); d.rotation.y = (R() - 0.5) * 0.8; dead.push(d); }
+    bakeChunks(scene, dead, bakeMat(0x1a1008));
+    const FAR = ['tree_default_fall', 'tree_default_fall', 'tree_default_fall'];
+    for (let x = -10; x < L.len + 20; x += 7 + R() * 6) { const m = K.model(FAR[Math.floor(R() * 3)], { s: 2.4 + R() * 1.4, mat: dryM }); m.position.set(x, 0, -12 - R() * 6); scene.add(noShadow(m)); }
+    const SM = ['stump_round', 'rock_smallA', 'rock_smallC', 'plant_bushSmall', 'rock_smallFlatA', 'plant_bush'];
+    for (let x = -10; x < L.len + 20; x += 2 + R() * 2.6) { if (L.gaps.some(g => x > g[0] - 1 && x < g[1] + 1)) continue; const front = R() >= 0.6, name = front ? (R() < 0.5 ? 'plant_bushSmall' : 'rock_smallFlatA') : SM[Math.floor(R() * SM.length)], m = K.model(name, { s: front ? 0.8 + R() * 0.4 : 1.2 + R() * 0.8, mat: /plant/.test(name) ? dryM : undefined }); m.position.set(x, 0, front ? 1.8 + R() * 1.4 : -1.3 - R() * 1.2); /* vorne nur Kleines, damit nichts die Figur verdeckt */ m.rotation.y = R() * 6; scene.add(noShadow(m)); }
+    for (let x = -20; x < L.len + 40; x += 9 + R() * 8) { const h = new T.Mesh(new T.SphereGeometry(1, 12, 8), LM(R() < 0.5 ? 0xc8a068 : 0xb88e5a)); h.scale.set(6 + R() * 5, 2.5 + R() * 2.5, 3); h.position.set(x, -0.6, -18 - R() * 8); scene.add(h); }
+    for (let i = 0; i < 12; i++) { const g = glowSprite('rgba(230,200,150,1)', 0.25 + R() * 0.25, 0.6); g.material.blending = T.NormalBlending; g.ph = R() * 6; g.bx = R() * 30 - 15; g.by = 0.4 + R() * 3; g.bz = -1 - R() * 3; scene.add(g); movers.push(g); }
+    for (let i = 0; i < 5; i++) { const m = glowSprite('rgba(220,190,140,1)', 1, 0.18); m.material.blending = T.NormalBlending; m.scale.set(7 + R() * 4, 1.2, 1); m.bx = i * 8 - 16; m.bz = 1 - R() * 4; m.sp = 0.6 + R() * 0.4; scene.add(m); mist.push(m); }
   } else {
     // Kirschiland: Büsche, Kirschbäume, Blumen, Hügel, Wolken (fest in der Welt; weit genug weg, dass nichts die Figur verdeckt)
     for (let x = -10; x < L.len + 20; x += 2.4 + R() * 3) { const name = PROPS[Math.floor(R() * PROPS.length)], m = K.model(name, { s: 1.2 + R() * 0.8 }); m.position.set(x, 0, -2.6 - R() * 6); m.rotation.y = R() * 6; scene.add(noShadow(m)); }
@@ -1704,9 +2086,12 @@ F3.level = (el, ctx) => {
   // Hindernisse und Plattformen
   FL.trees(L).forEach(t => { const g = cherryTree(t.h, R); g.position.set(t.x, 0, 0); scene.add(g); });
   // Wolken-Plattformen: zusammengebacken (wenige Zeichenaufrufe); Sprungwolken rosa und einzeln (sie federn sichtbar)
-  const plat = [], springs = [];
+  const plat = [], springs = [], lilies = [], brittles = [], trunks = [];
   FL.cloudList(L).forEach((c, ci) => {
     if (L.theme === 'wald') { scene.add(branch(c, ci % 2 ? 1 : -1)); return; }
+    if (c.lily) { const g = lilyPad(c); g.position.set(c.x, c.y - 0.03, 0); g.rotation.y = R() * 0.6 - 0.3; scene.add(g); lilies.push({ c, g }); return; }
+    if (SUMPF) { plat.push(mossLog(c)); return; }
+    if (DRY) { const b = dryBranch(c, ci % 2 ? 1 : -1, c.brittle); trunks.push(b.trunk); if (c.brittle) { b.arm.traverse(x => { if (x.isMesh) x.castShadow = true; }); scene.add(b.arm); brittles.push({ c, g: b.arm }); } else plat.push(b.arm); return; }
     const g = new T.Group(), n = Math.max(2, Math.round(c.w / 0.9));
     for (let i = 0; i < n; i++) { const p = cloudPuff(0.55, c.bounce ? 0xffa8d6 : REGEN ? 0xf4f6fd : 0xffffff, c.bounce ? 0xa04a80 : 0x8a9ab0); p.scale.set(0.6, c.bounce ? 0.5 : 0.42, 0.75); p.position.set(-c.w / 2 + 0.4 + i * (c.w - 0.8) / (n - 1), 0, 0); g.add(p); }
     g.position.set(c.x, c.y - 0.22, 0);
@@ -1715,7 +2100,8 @@ F3.level = (el, ctx) => {
       g.traverse(x => { if (x.isMesh) { x.castShadow = true; x.receiveShadow = true; } }); scene.add(g); springs.push({ c, g, sq: 0 });
     } else plat.push(g);
   });
-  if (plat.length) bakeChunks(scene, plat, bakeMat(0x8a9ab0), { cast: true, recv: true });
+  if (plat.length) bakeChunks(scene, plat, bakeMat(SUMPF || DRY ? 0 : 0x8a9ab0), { cast: true, recv: true });
+  if (trunks.length) bakeChunks(scene, trunks, bakeMat(0));
   // Sammeldinge, Herzen
   const items = st.items.map(it => { const g = TH.item(); g.position.set(it.x, it.y, 0); scene.add(g); return g; });
   const hearts = st.hearts2.map(h => { const g = K.model('pf-heart', { s: 1.6 }); g.position.set(h.x, h.y - 0.3, 0); scene.add(g); return g; });
@@ -1728,7 +2114,8 @@ F3.level = (el, ctx) => {
   const addMons = () => { for (let i = mons.length; i < st.mons.length; i++) { const m = st.mons[i], look = m.look || m.type, d = m.kid ? Object.assign({}, FL.MON[look], { h: m.h }) : FL.MON[m.type], g = monster(look, d, TH.skin); if (m.mini) g.scale.setScalar(0.85); g.position.set(m.x, m.y, 0); scene.add(g); mons.push(g); } };
   // Hagelkörner mit Schatten am Boden
   const shots = [], iceM = K.mat(0xeaf6ff, { e: 0x6a90c0, ei: 0.35 }), shotSh = new T.MeshBasicMaterial({ color: 0x1a1830, transparent: true, opacity: 0.3, depthWrite: false });
-  const getShot = i => { if (!shots[i]) { const g = ball(0.17, iceM, { seg: 8 }); const sh = new T.Mesh(new T.CircleGeometry(0.3, 12).rotateX(-Math.PI / 2), shotSh); scene.add(g, sh); g.sh = sh; shots[i] = g; } return shots[i]; };
+  const acornM = K.mat(0xc8904a), capM = K.mat(0x6a4a2a);
+  const getShot = i => { if (!shots[i]) { const g = ball(0.17, iceM, { seg: 8 }); const sh = new T.Mesh(new T.CircleGeometry(0.3, 12).rotateX(-Math.PI / 2), shotSh); g.cap = new T.Mesh(new T.SphereGeometry(1.05, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), capM); g.cap.position.y = 0.35; g.cap.scale.set(1, 0.6, 1); g.add(g.cap); scene.add(g, sh); g.sh = sh; shots[i] = g; } return shots[i]; };
   addMons();
   const farts = []; const fartMat = new T.MeshLambertMaterial({ color: TH.fart, transparent: true, opacity: 0.75, flatShading: true });
   const getFart = i => { if (!farts[i]) { const c = new T.Group(); [[0, 0, 0.35], [0.3, 0.12, 0.25], [-0.28, 0.08, 0.27], [0.05, 0.3, 0.22]].forEach(b => { const s = new T.Mesh(new T.IcosahedronGeometry(b[2], 1), fartMat); s.position.set(b[0], b[1], 0); c.add(s); }); scene.add(c); farts[i] = c; } return farts[i]; };
@@ -1757,6 +2144,21 @@ F3.level = (el, ctx) => {
     }
     return bolts[i];
   };
+  const grass = [], roots = [], crackM = new T.MeshBasicMaterial({ color: 0x3a2410, transparent: true, opacity: 0.5, depthWrite: false }), rootM = K.mat(0x6a4a2c);
+  const getRoot = i => {
+    if (!roots[i]) {
+      const g = new T.Group(), sh = new T.Mesh(new T.CircleGeometry(0.75, 9).rotateX(-Math.PI / 2), crackM); sh.position.y = 0.03; g.add(sh); g.sh = sh;
+      const r = new T.Group(); [[0, 1.6, 0.2], [-0.3, 1.1, 0.15], [0.32, 1.25, 0.15]].forEach(([x, h, w]) => { const c = tm(new T.ConeGeometry(w, h, 6), rootM); c.position.set(x, h / 2, 0.1); c.rotation.z = -x * 0.5; r.add(c); });
+      g.add(r); g.r = r; scene.add(g); roots[i] = g;
+    }
+    return roots[i];
+  };
+  let tongue = null;
+  if (st.boss && st.boss.type === 'quabbel') {
+    tongue = new T.Group(); const tm2 = K.mat(0xff6f91);
+    tongue.bar = new T.Mesh(new T.CylinderGeometry(0.11, 0.11, 1, 8).rotateZ(Math.PI / 2).translate(0.5, 0, 0), tm2); tongue.add(tongue.bar);
+    tongue.tip = ball(0.22, tm2, { seg: 10 }); tongue.add(tongue.tip); tongue.visible = false; scene.add(tongue);
+  }
   // Figur (Drehpunkt in der Mitte für den Salto)
   const piv = new T.Group(); scene.add(piv);
   const fig = K.char(ctx.char, ctx.wear); fig.position.y = -0.55; piv.add(fig);
@@ -1792,6 +2194,14 @@ F3.level = (el, ctx) => {
       rain.position.set(camX, camY - 3, 0); const a = rain.geometry.attributes.position, v = a.array; for (let i = 0; i < v.length; i += 6) { v[i + 1] -= 14 * dt; v[i + 4] -= 14 * dt; if (v[i + 4] < 0) { v[i + 1] += 11; v[i + 4] += 11; } } a.needsUpdate = true;
     }
     springs.forEach(s => { s.sq = Math.max(0, s.sq - dt * 3); s.g.scale.set(1 + s.sq * 0.15, 1 - s.sq * 0.35, 1); });
+    if (water) { water.position.x = camX; water.tick(tt); }
+    // Seerosen sinken (und wackeln dabei), morsche Äste zittern, fallen und wachsen nach
+    lilies.forEach(l => { const d = st.lily[l.c.i] || 0, vis = Math.abs(l.c.x - camX) < 18 && d < 1.0; l.g.visible = vis; if (!vis) return; l.g.position.y = l.c.y - 0.03 - Math.min(d, 0.8); l.g.rotation.z = d > 0.02 && d < FL.PHYS.LILY_MAX ? Math.sin(tt * 9) * 0.04 : 0; });
+    brittles.forEach(b => {
+      const s = st.brk[b.c.i], g = b.g; if (Math.abs(b.c.x - camX) > 18) { g.visible = false; return; }
+      if (s && s.gone > 0) { const e = FL.PHYS.REGROW - s.gone; g.visible = e < 0.9; g.position.set(b.c.x, b.c.y - 8 * e * e, 0); g.rotation.z = e * 2.5; g.scale.setScalar(1); }
+      else { if (b.back > 0) b.back = Math.max(0, b.back - dt * 2.5); g.visible = true; g.rotation.z = 0; g.position.set(b.c.x + (s && s.t > 0 ? Math.sin(tt * 70) * 0.05 : 0), b.c.y, 0); g.scale.setScalar(Math.max(0.05, 1 - (b.back || 0))); }
+    });
     // Figur
     piv.position.set(p.x, p.y + 0.55, 0);
     fig.rotation.y = p.face > 0 ? -0.35 : Math.PI + 0.35;
@@ -1806,7 +2216,7 @@ F3.level = (el, ctx) => {
     if (st.mons.length > mons.length) addMons();
     st.mons.forEach((m, i) => { const g = mons[i]; const vis = Math.abs(m.x - camX) < 18; g.visible = vis; if (!vis) return; g.position.set(m.x, m.y, 0); poseMon(g, m, tt); });
     for (let i = st.mons.length; i < mons.length; i++) mons[i].visible = false;
-    st.shots.forEach((s, i) => { const g = getShot(i); g.visible = g.sh.visible = true; g.position.set(s.x, s.y, 0); g.rotation.z = tt * 6; const gy = FL.groundAt(L, s.x); g.sh.visible = gy > -50; g.sh.position.set(s.x, gy + 0.03, 0); const near = Math.max(0, 1 - (s.y - gy) / 3); g.sh.scale.setScalar(0.5 + near * 0.6); g.sh.material.opacity = 0.15 + near * 0.3; });
+    st.shots.forEach((s, i) => { const g = getShot(i); g.visible = g.sh.visible = true; g.position.set(s.x, s.y, 0); g.rotation.z = tt * 6; const ac = s.k === 'acorn'; g.material = ac ? acornM : iceM; g.scale.set(0.17 * (ac ? 0.85 : 1), 0.17 * (ac ? 1.15 : 1), 0.17 * (ac ? 0.85 : 1)); g.cap.visible = ac; const gy = FL.groundAt(L, s.x); g.sh.visible = gy > -50; g.sh.position.set(s.x, gy + 0.03, 0); const near = Math.max(0, 1 - (s.y - gy) / 3); g.sh.scale.setScalar(0.5 + near * 0.6); g.sh.material.opacity = 0.15 + near * 0.3; });
     for (let i = st.shots.length; i < shots.length; i++) shots[i].visible = shots[i].sh.visible = false;
     st.clouds.forEach((c, i) => { const g = getFart(i); g.visible = true; g.position.set(c.x, c.y, 0.1); g.scale.setScalar(0.8 + (2.2 - c.t) * 0.25); });
     for (let i = st.clouds.length; i < farts.length; i++) farts[i].visible = false;
@@ -1826,13 +2236,24 @@ F3.level = (el, ctx) => {
       if (free) { boss.body.position.y = boss.r0 + Math.abs(Math.sin(tt * 4)) * 0.2; boss.feet.forEach(f => { f.position.y = 0.12 + Math.abs(Math.sin(tt * 4)) * 0.2; }); }
       st.waves.forEach((w, i) => { const m = getWave(i); m.visible = true; m.position.x = w.x; m.core.rotation.z = -w.dir * tt * 9; m.core.position.y = 0.3 + Math.abs(Math.sin(tt * 9 + i)) * 0.12; });
       for (let i = st.waves.length; i < waves.length; i++) waves[i].visible = false;
-      const bd = FL.BOSS.donner;
-      st.bolts.forEach((z, i) => {
-        const g = getBolt(i), w = Math.min(1, z.t / bd.warn); g.visible = true; g.position.set(z.x, ground(z.x), 0);
+      const bd = FL.BOSS.donner; let bi = 0, ri = 0;
+      st.bolts.forEach(z => {
+        if (z.k === 'root') {
+          // Knorz: erst Risse und Staub am Boden, dann schießen Wurzeln heraus
+          const g = getRoot(ri++), w = Math.min(1, z.t / z.warn); g.visible = true; g.position.set(z.x, ground(z.x), 0);
+          g.sh.scale.setScalar(0.4 + w * 0.6); g.sh.material.opacity = 0.35 + w * 0.4 + (z.hit ? 0 : Math.sin(tt * 18) * 0.1);
+          const k = z.hit ? Math.min(1, (z.t - z.warn) / 0.12) : 0; g.r.visible = k > 0; g.r.scale.set(1, Math.max(0.01, k), 1);
+          return;
+        }
+        const g = getBolt(bi++), w = Math.min(1, z.t / bd.warn); g.visible = true; g.position.set(z.x, ground(z.x), 0);
         g.sh.scale.setScalar(0.4 + w * 0.6); g.sh.material.opacity = 0.25 + w * 0.35 + (z.hit ? 0 : Math.sin(tt * 18) * 0.08);
         g.b.visible = g.gl.visible = !!z.hit; const top = Math.max(1.5, B.y + 0.4); g.b.scale.set(2.2, top, 1);
       });
-      for (let i = st.bolts.length; i < bolts.length; i++) bolts[i].visible = false;
+      for (let i = bi; i < bolts.length; i++) bolts[i].visible = false;
+      for (let i = ri; i < roots.length; i++) roots[i].visible = false;
+      // Quabbel: Zunge; Maul auf, wenn sie gleich kommt
+      if (tongue) { const on = (B.tl || 0) > 0.05; tongue.visible = on; if (on) { tongue.position.set(B.x + B.dir * FL.BOSS.quabbel.w * 0.35, 0.7, 0.55); tongue.bar.scale.set(B.tl, 1, 1); tongue.tip.position.x = B.tl; tongue.scale.x = B.dir; } if (B.state === 'aim' || B.state === 'lick') boss.mouth.scale.y = 0.4; }
+      if (boss.green) { boss.green.visible = free; boss.dry.visible = !free; boss.body.rotation.z += ((tired || hit ? 0.16 : 0) - boss.body.rotation.z) * Math.min(1, dt * 5); }
     }
     gates.forEach(g => { g.scale.setScalar(0.9); });
     goal.visible = !B || B.state === 'free';
@@ -1841,7 +2262,18 @@ F3.level = (el, ctx) => {
   // Ereignisse aus der Logik: Glitzer, Text
   const fx = e => {
     const v = new T.Vector3(e.x, (e.y || 0) + 0.3, 0.3);
-    if (e.type === 'item') sparks(scene, A, v, 5, TH.spark, 0.6);
+    if (e.type === 'item') {
+      sparks(scene, A, v, 5, TH.spark, 0.6);
+      // Trockener Wald: wo ein Tropfen gesammelt wird, sprießt Gras (manchmal eine Blume)
+      if (DRY && FL.groundAt(L, e.x) > -50) { const gy = FL.groundAt(L, e.x), n = grass.length, m = K.model(n % 3 === 2 ? (n % 2 ? 'flower_yellowA' : 'flower_redA') : 'grass_large', {}); m.position.set(e.x + (R() - 0.5) * 0.6, gy, (n % 2 ? -0.9 : 1.1) + (R() - 0.5) * 0.4); m.rotation.y = R() * 6; scene.add(noShadow(m)); grass.push(m); const s = 1.4 + R() * 0.4; A.add(0.6, k => m.scale.setScalar(s * (1 - (1 - k) * (1 - k)))); }
+    }
+    else if (e.type === 'splash') { sparks(scene, A, new T.Vector3(e.x, 0, 0.3), 12, '#a8e0ff', 1.2); floatText(scene, A, 'Platsch!', new T.Vector3(e.x, 1.2, 0.3), '#3a8ad8'); }
+    else if (e.type === 'creak') floatText(scene, A, 'Knack!', new T.Vector3(e.x, e.y + 0.8, 0.3), '#8a5a2a');
+    else if (e.type === 'break') sparks(scene, A, new T.Vector3(e.x, e.y, 0.3), 8, '#c8a070', 1.0);
+    else if (e.type === 'regrow') { let best = null; brittles.forEach(b => { if (!best || Math.abs(b.c.x - e.x) + Math.abs(b.c.y - e.y) < Math.abs(best.c.x - e.x) + Math.abs(best.c.y - e.y)) best = b; }); if (best) best.back = 1; }
+    else if (e.type === 'sink') sparks(scene, A, new T.Vector3(e.x, 0, 0.3), 6, '#c8f0ff', 0.7);
+    else if (e.type === 'rumble' || e.type === 'root') sparks(scene, A, new T.Vector3(e.x, 0.2, 0.4), e.type === 'root' ? 10 : 5, '#b08a5a', e.type === 'root' ? 1.4 : 0.7);
+    else if (e.type === 'crack' && e.k === 'acorn') sparks(scene, A, new T.Vector3(e.x, e.y + 0.15, 0.3), 5, '#c8904a', 0.5);
     else if (e.type === 'heart') { sparks(scene, A, v, 8, '#ff4f8b', 0.9); floatText(scene, A, '+1 ♥', v, '#ff4f8b'); }
     else if (e.type === 'stomp') { if (TH.skin === 'sturm') { sparks(scene, A, v, 12, '#ffffff', 1.4); floatText(scene, A, 'Flusch!', v, '#6a8ad8'); } else sparks(scene, A, v, 10, '#ffe66d', 1.2); }
     else if (e.type === 'hit' || e.type === 'boing') sparks(scene, A, v, 6, '#ffffff', 0.8);
@@ -2051,13 +2483,19 @@ const SND = {
   pop: () => tone(260, 0.15, 'sine', 520, 0.08), rain: () => tone(700, 0.3, 'sine', 300, 0.05),
   spring: () => tone(330, 0.3, 'sine', 990, 0.1), split: () => { tone(500, 0.08, 'sine', 300); setTimeout(() => tone(700, 0.1, 'sine', 400), 70); },
   suck: () => tone(200, 0.6, 'sine', 420, 0.04), blow: () => tone(500, 0.9, 'triangle', 180, 0.03), hail: () => tone(1400, 0.08, 'triangle', 900, 0.04), crack: () => tone(1800, 0.06, 'square', 1200, 0.03),
+  splash: () => { tone(500, 0.25, 'sine', 120, 0.08); setTimeout(() => tone(260, 0.3, 'triangle', 90, 0.05), 60); }, sink: () => tone(420, 0.4, 'sine', 180, 0.04),
+  creak: () => { tone(160, 0.08, 'square', 120, 0.04); setTimeout(() => tone(140, 0.1, 'square', 90, 0.04), 110); }, break: () => tone(120, 0.25, 'square', 50, 0.07), regrow: () => tone(600, 0.15, 'sine', 900, 0.03),
+  throw: () => tone(380, 0.12, 'triangle', 600, 0.04), aim: () => tone(140, 0.4, 'sawtooth', 200, 0.04), lick: () => tone(700, 0.18, 'sine', 300, 0.07), jumpboss: () => tone(160, 0.35, 'sine', 320, 0.08),
+  rumble: () => tone(70, 0.6, 'sawtooth', 50, 0.06), root: () => tone(110, 0.3, 'square', 60, 0.08),
   buy: () => [660, 880, 1320].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'triangle'), i * 90))
 };
 // Sammelding oben rechts je Land (eigene SVG, keine Emoji)
 const ICON = {
   kirsch: '<path d="M20 4 C 18 12 14 16 11 22 M20 4 C 22 12 26 16 29 22" stroke="#4caf50" stroke-width="3" fill="none"/><circle cx="11" cy="27" r="8" fill="#e0233c"/><circle cx="29" cy="27" r="8" fill="#e0233c"/><circle cx="8" cy="24" r="2.4" fill="#fff" opacity=".7"/><circle cx="26" cy="24" r="2.4" fill="#fff" opacity=".7"/>',
   regen: '<path d="M8 14 Q20 8 32 14 Q30 30 20 37 Q10 30 8 14Z" fill="#ff3b4f"/><path d="M12 13 L16 5 L20 11 L24 5 L28 13Z" fill="#4caf50"/><g fill="#fff2a0"><circle cx="15" cy="19" r="1.3"/><circle cx="24" cy="19" r="1.3"/><circle cx="19" cy="25" r="1.3"/><circle cx="14" cy="27" r="1.3"/><circle cx="25" cy="27" r="1.3"/></g>',
-  wald: '<path d="M24 6 Q32 6 33 12 Q27 12 24 6Z" fill="#4caf50"/><circle cx="13" cy="26" r="8" fill="#4a5cf0"/><circle cx="27" cy="26" r="8" fill="#4a5cf0"/><circle cx="20" cy="15" r="8" fill="#5a6cff"/><circle cx="17" cy="12" r="2.2" fill="#fff" opacity=".6"/>'
+  wald: '<path d="M24 6 Q32 6 33 12 Q27 12 24 6Z" fill="#4caf50"/><circle cx="13" cy="26" r="8" fill="#4a5cf0"/><circle cx="27" cy="26" r="8" fill="#4a5cf0"/><circle cx="20" cy="15" r="8" fill="#5a6cff"/><circle cx="17" cy="12" r="2.2" fill="#fff" opacity=".6"/>',
+  sumpf: '<ellipse cx="20" cy="31" rx="16" ry="5" fill="#4f9a3a"/><g fill="#ff8fc8"><path d="M20 30 Q12 22 14 12 Q20 18 20 30Z"/><path d="M20 30 Q28 22 26 12 Q20 18 20 30Z"/><path d="M20 30 Q8 28 5 19 Q14 20 20 30Z"/><path d="M20 30 Q32 28 35 19 Q26 20 20 30Z"/></g><path d="M20 30 Q16 20 20 9 Q24 20 20 30Z" fill="#ffd0e8"/><circle cx="20" cy="26" r="3" fill="#ffe066"/>',
+  dry: '<path d="M20 4 Q31 19 31 26 A11 11 0 0 1 9 26 Q9 19 20 4Z" fill="#5ab8ff"/><path d="M14 25 A6 6 0 0 0 18 31" stroke="#fff" stroke-width="2.4" fill="none" opacity=".75" stroke-linecap="round"/>'
 };
 document.addEventListener('pointerdown', audio, { capture: true });
 
